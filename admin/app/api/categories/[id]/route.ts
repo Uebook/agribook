@@ -94,8 +94,9 @@ export async function PUT(
     
     if (error) {
       console.error('Error updating category:', error);
+      console.error('Supabase error details:', JSON.stringify(error, null, 2));
       return NextResponse.json(
-        { error: 'Failed to update category' },
+        { error: 'Failed to update category', details: error.message },
         { status: 500 }
       );
     }

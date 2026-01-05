@@ -73,8 +73,9 @@ export async function POST(request: NextRequest) {
     
     if (error) {
       console.error('Error creating category:', error);
+      console.error('Supabase error details:', JSON.stringify(error, null, 2));
       return NextResponse.json(
-        { error: 'Failed to create category' },
+        { error: 'Failed to create category', details: error.message },
         { status: 500 }
       );
     }
