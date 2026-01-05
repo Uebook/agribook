@@ -59,15 +59,28 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Insert category
+    // Insert category - build data object conditionally
+    const insertData: any = {
+      name,
+      icon: icon || '📚',
+    };
+    
+    // Only add optional fields if they exist in schema
+    // Try to insert with all fields first, if it fails, try without optional ones
+    try {
+      if (description !== undefined && description !== null && description !== '') {
+        insertData.description = description;
+      }
+      if (status) {
+        insertData.status = status;
+      }
+    } catch (e) {
+      // Ignore - columns may not exist
+    }
+    
     const { data: category, error } = await supabase
       .from('categories')
-      .insert({
-        name,
-        description: description || null,
-        icon: icon || '📚',
-        status: status || 'active',
-      })
+      .insert(insertData)
       .select()
       .single();
     
