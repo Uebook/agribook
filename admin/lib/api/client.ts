@@ -205,6 +205,41 @@ class ApiClient {
     });
   }
 
+  // Categories API
+  async getCategories() {
+    return this.request<{ categories: any[] }>('/api/categories');
+  }
+
+  async createCategory(data: {
+    name: string;
+    description?: string;
+    icon?: string;
+    status?: string;
+  }) {
+    return this.request<{ category: any }>('/api/categories', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateCategory(id: string, data: {
+    name?: string;
+    description?: string;
+    icon?: string;
+    status?: string;
+  }) {
+    return this.request<{ category: any }>(`/api/categories/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteCategory(id: string) {
+    return this.request(`/api/categories/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
   // Upload API
   async getUploadUrl(data: { fileName: string; fileType: string; bucket: string; folder?: string }) {
     return this.request<{ uploadUrl: string; path: string; token: string; expiresAt: string }>(

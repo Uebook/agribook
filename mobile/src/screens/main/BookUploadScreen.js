@@ -824,6 +824,17 @@ const BookUploadScreen = ({ navigation }) => {
       color: themeColors.text.light,
       fontWeight: '600',
     },
+    categoryLoadingContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 16,
+    },
+    categoryLoadingText: {
+      marginLeft: 8,
+      fontSize: 14 * fontSizeMultiplier,
+      color: themeColors.text.secondary,
+    },
     uploadSection: {
       marginBottom: 24,
     },
@@ -1134,7 +1145,8 @@ const BookUploadScreen = ({ navigation }) => {
                   </Text>
                 </TouchableOpacity>
               ))}
-            </ScrollView>
+              </ScrollView>
+            )}
           </View>
 
           <View style={styles.row}>

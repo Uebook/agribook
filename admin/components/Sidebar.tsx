@@ -11,6 +11,7 @@ export default function Sidebar() {
         { href: '/books', icon: '📚', label: 'Books' },
         { href: '/audio-books', icon: '🎙️', label: 'Audio Books' },
         { href: '/authors', icon: '✍️', label: 'Authors' },
+        { href: '/categories', icon: '🏷️', label: 'Categories' },
         { href: '/users', icon: '👥', label: 'Users' },
         { href: '/curriculum', icon: '📄', label: 'Government Curriculum' },
         { href: '/settings', icon: '⚙️', label: 'Settings' },
