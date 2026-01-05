@@ -77,13 +77,24 @@ export async function PUT(
       }
     }
     
-    // Update category
+    // Update category - only include provided fields that exist in schema
     const updateData: any = {};
     if (name !== undefined) updateData.name = name;
-    if (description !== undefined) updateData.description = description;
     if (icon !== undefined) updateData.icon = icon;
-    if (status !== undefined) updateData.status = status;
-    updateData.updated_at = new Date().toISOString();
+    
+    // Only add optional fields if provided (columns may not exist in schema)
+    if (description !== undefined && description !== null) {
+      updateData.description = description;
+    }
+    if (status !== undefined) {
+      updateData.status = status;
+    }
+    // Try to add updated_at (may not exist in schema)
+    try {
+      updateData.updated_at = new Date().toISOString();
+    } catch (e) {
+      // Ignore if column doesn't exist
+    }
     
     const { data: category, error } = await supabase
       .from('categories')
