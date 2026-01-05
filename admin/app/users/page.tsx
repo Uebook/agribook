@@ -1,14 +1,47 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { dummyUsers, type User } from '@/lib/dummyData';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
+import apiClient from '@/lib/api/client';
+
+interface User {
+    id: string;
+    name: string;
+    email?: string;
+    mobile?: string;
+    role: string;
+    books_purchased?: number;
+    total_spent?: number;
+    status?: string;
+    created_at?: string;
+    avatar_url?: string;
+}
 
 export default function UsersPage() {
     const router = useRouter();
-    const [users] = useState<User[]>(dummyUsers);
+    const [users, setUsers] = useState<User[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        fetchUsers();
+    }, []);
+
+    const fetchUsers = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+            const response = await apiClient.getUsers();
+            setUsers(response.users || []);
+        } catch (err: any) {
+            console.error('Error fetching users:', err);
+            setError(err.message || 'Failed to fetch users');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const getStatusBadge = (status: string) => {
         const styles = {
@@ -42,9 +75,34 @@ export default function UsersPage() {
                     <div className="max-w-7xl mx-auto">
                         <div className="flex items-center justify-between mb-6">
                             <h2 className="text-3xl font-bold text-gray-900">Users Management</h2>
+                            <button
+                                onClick={fetchUsers}
+                                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                            >
+                                Refresh
+                            </button>
                         </div>
 
-                        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+                        {loading ? (
+                            <div className="bg-white rounded-lg shadow-sm p-8 text-center">
+                                <p className="text-gray-500">Loading users...</p>
+                            </div>
+                        ) : error ? (
+                            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                                <p className="text-red-800">{error}</p>
+                                <button
+                                    onClick={fetchUsers}
+                                    className="mt-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                                >
+                                    Retry
+                                </button>
+                            </div>
+                        ) : users.length === 0 ? (
+                            <div className="bg-white rounded-lg shadow-sm p-8 text-center">
+                                <p className="text-gray-500">No users found.</p>
+                            </div>
+                        ) : (
+                            <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                             <table className="min-w-full divide-y divide-gray-200">
                                 <thead className="bg-gray-50">
                                     <tr>
@@ -75,24 +133,37 @@ export default function UsersPage() {
                                     {users.map((user) => (
                                         <tr key={user.id} className="hover:bg-gray-50">
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm font-medium text-gray-900">{user.name}</div>
-                                                <div className="text-sm text-gray-500">Joined: {new Date(user.joinDate).toLocaleDateString()}</div>
+                                                <div className="flex items-center">
+                                                    {user.avatar_url && (
+                                                        <img
+                                                            src={user.avatar_url}
+                                                            alt={user.name}
+                                                            className="w-10 h-10 rounded-full mr-3"
+                                                        />
+                                                    )}
+                                                    <div>
+                                                        <div className="text-sm font-medium text-gray-900">{user.name}</div>
+                                                        <div className="text-sm text-gray-500">
+                                                            Joined: {user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm text-gray-900">{user.email}</div>
-                                                <div className="text-sm text-gray-500">{user.mobile}</div>
+                                                <div className="text-sm text-gray-900">{user.email || 'N/A'}</div>
+                                                <div className="text-sm text-gray-500">{user.mobile || 'N/A'}</div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                {getRoleBadge(user.role)}
+                                                {getRoleBadge(user.role || 'reader')}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm text-gray-900">{user.booksPurchased}</div>
+                                                <div className="text-sm text-gray-900">{user.books_purchased || 0}</div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm text-gray-900">₹{user.totalSpent.toLocaleString()}</div>
+                                                <div className="text-sm text-gray-900">₹{(user.total_spent || 0).toLocaleString()}</div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                {getStatusBadge(user.status)}
+                                                {getStatusBadge(user.status || 'active')}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                                 <div className="flex space-x-2">
@@ -116,6 +187,7 @@ export default function UsersPage() {
                                 </tbody>
                             </table>
                         </div>
+                        )}
                     </div>
                 </main>
             </div>
