@@ -277,82 +277,18 @@ const BookUploadScreen = ({ navigation }) => {
     setUploadProgress(0);
 
     try {
-      // DUMMY DATA MODE: For testing without API
-      const USE_DUMMY_DATA = false; // Set to true to test without API, false to use real API
-      
-      if (USE_DUMMY_DATA) {
-        // Simulate upload progress with realistic steps
-        console.log('📦 Dummy Mode: Simulating book upload...');
-        
-        // Step 1: Upload file (PDF or Audio)
-        setUploadProgress(10);
-        await new Promise(resolve => setTimeout(resolve, 300));
-        console.log('📄 Dummy: File uploaded');
-        
-        // Step 2: Upload cover images
-        if (coverImages.length > 0) {
-          const imageSteps = 60 / coverImages.length;
-          for (let i = 0; i < coverImages.length; i++) {
-            setUploadProgress(20 + (i + 1) * imageSteps);
-            await new Promise(resolve => setTimeout(resolve, 200));
-            console.log(`🖼️ Dummy: Cover image ${i + 1}/${coverImages.length} uploaded`);
-          }
-        } else {
-          setUploadProgress(60);
-          await new Promise(resolve => setTimeout(resolve, 300));
-        }
-        
-        // Step 3: Create book record
-        setUploadProgress(80);
-        await new Promise(resolve => setTimeout(resolve, 300));
-        console.log('✅ Dummy: Book record created');
-        
-        setUploadProgress(100);
-        await new Promise(resolve => setTimeout(resolve, 200));
-        
-        const bookTypeText = bookType === 'book' ? 'Book' : 'Audio Book';
-        Alert.alert(
-          `Success (Dummy Mode)`,
-          `${bookTypeText} uploaded successfully!\n\n📝 Title: ${formData.title}\n📁 Category: ${categories.find(c => c.id === formData.category)?.name || 'N/A'}\n💰 Price: ₹${formData.price || '0'}\n\nNote: This is dummy data mode. The ${bookTypeText.toLowerCase()} was not actually uploaded to the server.`,
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                setFormData({
-                  title: '',
-                  description: '',
-                  category: '',
-                  price: '',
-                  language: 'English',
-                  pages: '',
-                  isbn: '',
-                });
-                setCoverImages([]);
-                setPdfFile(null);
-                setAudioFile(null);
-                setUploadProgress(0);
-                navigation.goBack();
-              },
-            },
-          ]
-        );
-        setIsUploading(false);
-        return;
-      }
+      if (bookType === 'book') {
+        // Calculate total steps (files are now optional for testing)
+        let pdfUploadStep = pdfFile ? 1 : 0;
+        let imageUploadSteps = coverImages.length > 0 ? coverImages.length : 0;
+        let totalSteps = pdfUploadStep + imageUploadSteps + 1; // Files + Create record
+        let currentStep = 0;
 
-      let totalSteps = 0;
-      let currentStep = 0;
+        let pdfUrl = null;
+        let coverImageUrls = [];
 
-      // Calculate total steps (files are now optional for testing)
-      let pdfUploadStep = pdfFile ? 1 : 0;
-      let imageUploadSteps = coverImages.length > 0 ? coverImages.length : 0;
-      totalSteps = pdfUploadStep + imageUploadSteps + 1; // Files + Create record
-
-      let pdfUrl = null;
-      let coverImageUrls = [];
-
-      // Step 1: Upload PDF/Audio file (OPTIONAL for testing)
-      if (bookType === 'book' && pdfFile) {
+        // Step 1: Upload PDF file (OPTIONAL for testing)
+        if (pdfFile) {
         setUploadProgress(Math.round((currentStep / totalSteps) * 100));
         try {
           const fileToUpload = pdfFile.file || {
@@ -401,24 +337,27 @@ const BookUploadScreen = ({ navigation }) => {
         await Promise.all(imageUploadPromises);
       }
 
-      // Step 3: Create book record (even without files for testing)
-      setUploadProgress(Math.round((currentStep / totalSteps) * 100));
-      const bookData = {
-        title: formData.title,
-        author_id: userId,
-        summary: formData.description,
-        price: parseFloat(formData.price) || 0,
-        pages: formData.pages ? parseInt(formData.pages) : null,
-        language: formData.language,
-        category_id: formData.category,
-        isbn: formData.isbn || null,
-        is_free: false,
-        pdf_url: pdfUrl, // Can be null for testing
-        cover_image_url: coverImageUrls[0] || null, // Can be null for testing
-        cover_images: coverImageUrls, // Can be empty array for testing
-      };
+        // Step 3: Create book record (even without files for testing)
+        setUploadProgress(Math.round((currentStep / totalSteps) * 100));
+        const bookPrice = parseFloat(formData.price) || 0;
+        const bookData = {
+          title: formData.title,
+          author_id: userId,
+          summary: formData.description,
+          price: bookPrice,
+          original_price: bookPrice, // Set original_price same as price
+          pages: formData.pages ? parseInt(formData.pages) : null,
+          language: formData.language,
+          category_id: formData.category,
+          isbn: formData.isbn || null,
+          is_free: false,
+          pdf_url: pdfUrl, // Can be null for testing
+          cover_image_url: coverImageUrls[0] || null, // Can be null for testing
+          cover_images: coverImageUrls, // Can be empty array for testing
+          published_date: new Date().toISOString(), // Set published date to current date
+        };
 
-      await apiClient.createBook(bookData);
+        await apiClient.createBook(bookData);
         currentStep++;
         setUploadProgress(100);
 
@@ -450,7 +389,8 @@ const BookUploadScreen = ({ navigation }) => {
         // Calculate total steps for audio book (files are optional)
         let audioUploadStep = audioFile ? 1 : 0;
         let imageUploadSteps = coverImages.length > 0 ? coverImages.length : 0;
-        totalSteps = audioUploadStep + imageUploadSteps + 1;
+        let totalSteps = audioUploadStep + imageUploadSteps + 1;
+        let currentStep = 0;
 
         let audioUrl = null;
         let coverImageUrls = [];
@@ -514,8 +454,10 @@ const BookUploadScreen = ({ navigation }) => {
           duration: '00:00', // TODO: Calculate from audio file
           language: formData.language,
           category_id: formData.category,
-          audio_url: audioUrl,
-          cover_url: coverImageUrls[0] || null,
+          is_free: true, // Audio books default to free
+          audio_url: audioUrl, // Can be null for testing
+          cover_url: coverImageUrls[0] || null, // Can be null for testing
+          published_date: new Date().toISOString(), // Set published date to current date
         };
 
         await apiClient.createAudioBook(audioBookData);
