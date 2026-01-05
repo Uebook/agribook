@@ -1,27 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/client';
 
-// GET /api/books - List books with pagination
+// GET /api/audio-books - List audio books with pagination
 export async function GET(request: NextRequest) {
   try {
     const supabase = createServerClient();
     const searchParams = request.nextUrl.searchParams;
     
-    // Pagination
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
     const offset = (page - 1) * limit;
-    
-    // Filters
-    const categoryId = searchParams.get('category');
-    const authorId = searchParams.get('author');
-    const language = searchParams.get('language');
-    const search = searchParams.get('search');
     const status = searchParams.get('status') || 'published';
     
-    // Build query
     let query = supabase
-      .from('books')
+      .from('audio_books')
       .select(`
         *,
         author:authors(*),
@@ -31,45 +23,23 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
     
-    // Apply filters
-    if (categoryId) {
-      query = query.eq('category_id', categoryId);
-    }
-    
-    if (authorId) {
-      query = query.eq('author_id', authorId);
-    }
-    
-    if (language) {
-      query = query.eq('language', language);
-    }
-    
-    if (search) {
-      // Full-text search
-      query = query.textSearch('title', search, {
-        type: 'websearch',
-        config: 'english',
-      });
-    }
-    
-    const { data: books, error, count } = await query;
+    const { data: audioBooks, error } = await query;
     
     if (error) {
-      console.error('Error fetching books:', error);
+      console.error('Error fetching audio books:', error);
       return NextResponse.json(
-        { error: 'Failed to fetch books' },
+        { error: 'Failed to fetch audio books' },
         { status: 500 }
       );
     }
     
-    // Get total count for pagination
     const { count: totalCount } = await supabase
-      .from('books')
+      .from('audio_books')
       .select('*', { count: 'exact', head: true })
       .eq('status', status);
     
     return NextResponse.json({
-      books: books || [],
+      audioBooks: audioBooks || [],
       pagination: {
         page,
         limit,
@@ -78,7 +48,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Error in GET /api/books:', error);
+    console.error('Error in GET /api/audio-books:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -86,7 +56,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/books - Create new book
+// POST /api/audio-books - Create new audio book
 export async function POST(request: NextRequest) {
   try {
     const supabase = createServerClient();
@@ -95,44 +65,35 @@ export async function POST(request: NextRequest) {
     const {
       title,
       author_id,
-      summary,
-      price,
-      original_price,
-      pages,
+      description,
+      audio_url,
+      cover_url,
+      duration,
       language,
       category_id,
-      isbn,
       is_free,
-      pdf_url,
-      cover_image_url,
-      cover_images,
       published_date,
     } = body;
     
-    // Validate required fields
-    if (!title || !author_id || !category_id) {
+    if (!title || !author_id) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
       );
     }
     
-    const { data: book, error } = await supabase
-      .from('books')
+    const { data: audioBook, error } = await supabase
+      .from('audio_books')
       .insert({
         title,
         author_id,
-        summary,
-        price: price || 0,
-        original_price: original_price || price || 0,
-        pages,
+        description,
+        audio_url,
+        cover_url,
+        duration,
         language: language || 'English',
         category_id,
-        isbn,
-        is_free: is_free || false,
-        pdf_url,
-        cover_image_url,
-        cover_images: cover_images || [],
+        is_free: is_free || true,
         published_date: published_date || new Date().toISOString(),
         status: 'pending',
       })
@@ -140,27 +101,20 @@ export async function POST(request: NextRequest) {
       .single();
     
     if (error) {
-      console.error('Error creating book:', error);
+      console.error('Error creating audio book:', error);
       return NextResponse.json(
-        { error: 'Failed to create book' },
+        { error: 'Failed to create audio book' },
         { status: 500 }
       );
     }
     
-    // Update author's books count
-    await supabase.rpc('increment_author_books', {
-      author_id_param: author_id,
-    });
-    
-    return NextResponse.json({ book }, { status: 201 });
+    return NextResponse.json({ audioBook }, { status: 201 });
   } catch (error) {
-    console.error('Error in POST /api/books:', error);
+    console.error('Error in POST /api/audio-books:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
     );
   }
 }
-
-
 

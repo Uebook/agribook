@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/client';
 
-// GET /api/books/[id] - Get single book
+// GET /api/audio-books/[id] - Get single audio book
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -10,8 +10,8 @@ export async function GET(
     const supabase = createServerClient();
     const { id } = params;
     
-    const { data: book, error } = await supabase
-      .from('books')
+    const { data: audioBook, error } = await supabase
+      .from('audio_books')
       .select(`
         *,
         author:authors(*),
@@ -21,21 +21,16 @@ export async function GET(
       .single();
     
     if (error) {
-      console.error('Error fetching book:', error);
+      console.error('Error fetching audio book:', error);
       return NextResponse.json(
-        { error: 'Book not found' },
+        { error: 'Audio book not found' },
         { status: 404 }
       );
     }
     
-    // Increment view count
-    await supabase.rpc('increment_book_views', {
-      book_id_param: id,
-    });
-    
-    return NextResponse.json({ book });
+    return NextResponse.json({ audioBook });
   } catch (error) {
-    console.error('Error in GET /api/books/[id]:', error);
+    console.error('Error in GET /api/audio-books/[id]:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -43,7 +38,7 @@ export async function GET(
   }
 }
 
-// PUT /api/books/[id] - Update book
+// PUT /api/audio-books/[id] - Update audio book
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -53,8 +48,8 @@ export async function PUT(
     const { id } = params;
     const body = await request.json();
     
-    const { data: book, error } = await supabase
-      .from('books')
+    const { data: audioBook, error } = await supabase
+      .from('audio_books')
       .update({
         ...body,
         updated_at: new Date().toISOString(),
@@ -64,16 +59,16 @@ export async function PUT(
       .single();
     
     if (error) {
-      console.error('Error updating book:', error);
+      console.error('Error updating audio book:', error);
       return NextResponse.json(
-        { error: 'Failed to update book' },
+        { error: 'Failed to update audio book' },
         { status: 500 }
       );
     }
     
-    return NextResponse.json({ book });
+    return NextResponse.json({ audioBook });
   } catch (error) {
-    console.error('Error in PUT /api/books/[id]:', error);
+    console.error('Error in PUT /api/audio-books/[id]:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -81,7 +76,7 @@ export async function PUT(
   }
 }
 
-// DELETE /api/books/[id] - Delete book
+// DELETE /api/audio-books/[id] - Delete audio book
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -90,44 +85,40 @@ export async function DELETE(
     const supabase = createServerClient();
     const { id } = params;
     
-    // Get book to delete PDF file
-    const { data: book } = await supabase
-      .from('books')
-      .select('pdf_url')
+    const { data: audioBook } = await supabase
+      .from('audio_books')
+      .select('audio_url')
       .eq('id', id)
       .single();
     
-    // Delete from database
     const { error } = await supabase
-      .from('books')
+      .from('audio_books')
       .delete()
       .eq('id', id);
     
     if (error) {
-      console.error('Error deleting book:', error);
+      console.error('Error deleting audio book:', error);
       return NextResponse.json(
-        { error: 'Failed to delete book' },
+        { error: 'Failed to delete audio book' },
         { status: 500 }
       );
     }
     
-    // Delete PDF file from storage if exists
-    if (book?.pdf_url) {
-      const fileName = book.pdf_url.split('/').pop();
+    // Delete audio file from storage if exists
+    if (audioBook?.audio_url) {
+      const fileName = audioBook.audio_url.split('/').pop();
       await supabase.storage
-        .from('books')
+        .from('audio-books')
         .remove([fileName || '']);
     }
     
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error in DELETE /api/books/[id]:', error);
+    console.error('Error in DELETE /api/audio-books/[id]:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
     );
   }
 }
-
-
 

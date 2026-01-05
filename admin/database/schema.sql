@@ -180,3 +180,4 @@ INSERT INTO categories (name, icon) VALUES
 ON CONFLICT DO NOTHING;
 
 
+

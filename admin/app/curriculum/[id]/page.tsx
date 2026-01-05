@@ -132,3 +132,4 @@ export default function CurriculumViewPage({ params }: { params: Promise<{ id: s
 
 
 
+
