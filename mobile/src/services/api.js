@@ -16,9 +16,12 @@ class ApiClient {
   async request(endpoint, options = {}) {
     const url = `${this.baseUrl}${endpoint}`;
     
+    console.log('API Request:', { url, method: options.method || 'GET', baseUrl: this.baseUrl });
+    
     const config = {
       headers: {
         'Content-Type': 'application/json',
+        'Accept': '*/*',
         ...options.headers,
       },
       ...options,
@@ -199,13 +202,25 @@ class ApiClient {
 
       const url = `${this.baseUrl}/api/upload`;
       
-      console.log('Uploading file:', { fileName, fileType, bucket, folder, uri: fileUri.substring(0, 50) + '...' });
+      console.log('Uploading file:', { 
+        fileName, 
+        fileType, 
+        bucket, 
+        folder, 
+        uri: fileUri.substring(0, 50) + '...',
+        url: url,
+        baseUrl: this.baseUrl
+      });
       
       // Send FormData - React Native handles file reading and sending automatically
       const response = await fetch(url, {
         method: 'POST',
         body: formData,
         // Do NOT set Content-Type - React Native FormData sets it automatically with boundary
+        headers: {
+          // Explicitly allow all headers for CORS
+          'Accept': '*/*',
+        },
       });
 
       console.log('Upload response:', { status: response.status, statusText: response.statusText });
@@ -227,9 +242,18 @@ class ApiClient {
       return result;
     } catch (error) {
       console.error('Upload error:', error);
+      console.error('Upload error details:', {
+        message: error.message,
+        url: url,
+        baseUrl: this.baseUrl,
+        fileName,
+        fileType,
+        bucket,
+        folder,
+      });
       // Provide more helpful error messages
       if (error.message && error.message.includes('Network request failed')) {
-        throw new Error('Network error: Please check your internet connection and ensure the API server is accessible.');
+        throw new Error(`Network error: Cannot connect to ${url}. Please check your internet connection and ensure the API server is accessible.`);
       }
       throw error;
     }
