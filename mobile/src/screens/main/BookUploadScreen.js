@@ -289,53 +289,53 @@ const BookUploadScreen = ({ navigation }) => {
 
         // Step 1: Upload PDF file (OPTIONAL for testing)
         if (pdfFile) {
-        setUploadProgress(Math.round((currentStep / totalSteps) * 100));
-        try {
-          const fileToUpload = pdfFile.file || {
-            uri: pdfFile.uri,
-            type: pdfFile.type || 'application/pdf',
-            name: pdfFile.name || 'book.pdf',
-          };
-          const pdfResult = await apiClient.uploadFile(fileToUpload, 'books', 'pdfs', userId);
-          pdfUrl = pdfResult.url;
-          currentStep++;
           setUploadProgress(Math.round((currentStep / totalSteps) * 100));
-        } catch (uploadError) {
-          console.warn('PDF upload failed (optional):', uploadError);
-          // Continue without PDF for testing
-        }
-      }
-
-      // Step 2: Upload cover images (OPTIONAL for testing)
-      if (coverImages.length > 0) {
-        setUploadProgress(Math.round((currentStep / totalSteps) * 100));
-        const imageUploadPromises = [];
-        
-        for (let i = 0; i < coverImages.length; i++) {
-          if (coverImages[i].file || coverImages[i].uri) {
-            const imageFile = coverImages[i].file || {
-              uri: coverImages[i].uri,
-              type: coverImages[i].type || 'image/jpeg',
-              name: coverImages[i].name || `cover_${i}.jpg`,
+          try {
+            const fileToUpload = pdfFile.file || {
+              uri: pdfFile.uri,
+              type: pdfFile.type || 'application/pdf',
+              name: pdfFile.name || 'book.pdf',
             };
-            
-            imageUploadPromises.push(
-              apiClient.uploadFile(imageFile, 'books', 'covers', userId)
-                .then((result) => {
-                  coverImageUrls.push(result.url);
-                  currentStep++;
-                  setUploadProgress(Math.round((currentStep / totalSteps) * 100));
-                })
-                .catch((uploadError) => {
-                  console.warn(`Cover image ${i} upload failed (optional):`, uploadError);
-                  // Continue without this image for testing
-                })
-            );
+            const pdfResult = await apiClient.uploadFile(fileToUpload, 'books', 'pdfs', userId);
+            pdfUrl = pdfResult.url;
+            currentStep++;
+            setUploadProgress(Math.round((currentStep / totalSteps) * 100));
+          } catch (uploadError) {
+            console.warn('PDF upload failed (optional):', uploadError);
+            // Continue without PDF for testing
           }
         }
-        
-        await Promise.all(imageUploadPromises);
-      }
+
+        // Step 2: Upload cover images (OPTIONAL for testing)
+        if (coverImages.length > 0) {
+          setUploadProgress(Math.round((currentStep / totalSteps) * 100));
+          const imageUploadPromises = [];
+          
+          for (let i = 0; i < coverImages.length; i++) {
+            if (coverImages[i].file || coverImages[i].uri) {
+              const imageFile = coverImages[i].file || {
+                uri: coverImages[i].uri,
+                type: coverImages[i].type || 'image/jpeg',
+                name: coverImages[i].name || `cover_${i}.jpg`,
+              };
+              
+              imageUploadPromises.push(
+                apiClient.uploadFile(imageFile, 'books', 'covers', userId)
+                  .then((result) => {
+                    coverImageUrls.push(result.url);
+                    currentStep++;
+                    setUploadProgress(Math.round((currentStep / totalSteps) * 100));
+                  })
+                  .catch((uploadError) => {
+                    console.warn(`Cover image ${i} upload failed (optional):`, uploadError);
+                    // Continue without this image for testing
+                  })
+              );
+            }
+          }
+          
+          await Promise.all(imageUploadPromises);
+        }
 
         // Step 3: Create book record (even without files for testing)
         setUploadProgress(Math.round((currentStep / totalSteps) * 100));
