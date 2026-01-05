@@ -4,11 +4,11 @@ import { createServerClient } from '@/lib/supabase/client';
 // GET /api/categories/[id] - Get single category
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = createServerClient();
-    const { id } = params;
+    const { id } = await params;
     
     const { data: category, error } = await supabase
       .from('categories')
@@ -37,11 +37,11 @@ export async function GET(
 // PUT /api/categories/[id] - Update category
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = createServerClient();
-    const { id } = params;
+    const { id } = await params;
     const body = await request.json();
     
     const { name, description, icon, status } = body;
@@ -49,7 +49,7 @@ export async function PUT(
     // Check if category exists
     const { data: existingCategory } = await supabase
       .from('categories')
-      .select('id')
+      .select('id, name')
       .eq('id', id)
       .single();
     
@@ -113,11 +113,11 @@ export async function PUT(
 // DELETE /api/categories/[id] - Delete category
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = createServerClient();
-    const { id } = params;
+    const { id } = await params;
     
     // Check if category exists
     const { data: existingCategory } = await supabase
