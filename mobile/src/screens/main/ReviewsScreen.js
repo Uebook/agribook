@@ -1,8 +1,9 @@
 /**
  * Reviews & Ratings Screen
+ * Fetches reviews from API and allows readers to submit reviews
  */
 
-import React, { useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,24 +11,79 @@ import {
   ScrollView,
   TouchableOpacity,
   FlatList,
+  Modal,
+  TextInput,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
-import { reviews, getBookById } from '../../services/dummyData';
+import { reviews as dummyReviews, getBookById } from '../../services/dummyData'; // Fallback
 import Header from '../../components/common/Header';
 import { useSettings } from '../../context/SettingsContext';
+import { useAuth } from '../../context/AuthContext';
+import apiClient from '../../services/api';
 
 const ReviewsScreen = ({ route, navigation }) => {
   const { getThemeColors, getFontSizeMultiplier } = useSettings();
+  const { userRole, userId } = useAuth();
   const themeColors = getThemeColors();
   const fontSizeMultiplier = getFontSizeMultiplier();
   const { bookId } = route.params || {};
-  const book = bookId ? getBookById(bookId) : null;
+  const isReader = userRole === 'reader';
+  
+  const [bookReviews, setBookReviews] = useState([]);
+  const [book, setBook] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewForm, setReviewForm] = useState({
+    rating: 0,
+    comment: '',
+  });
+  const [userReview, setUserReview] = useState(null); // User's existing review
 
-  const bookReviews = useMemo(() => {
-    if (bookId) {
-      return reviews.filter((review) => review.bookId === bookId);
-    }
-    return reviews;
-  }, [bookId]);
+  // Fetch book and reviews from API
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!bookId) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError(null);
+
+        const [bookResponse, reviewsResponse] = await Promise.all([
+          apiClient.getBook(bookId),
+          apiClient.getReviews(bookId),
+        ]);
+
+        setBook(bookResponse.book);
+        setBookReviews(reviewsResponse.reviews || []);
+
+        // Check if user has already reviewed this book
+        if (userId && isReader) {
+          const userReviewData = reviewsResponse.reviews?.find(
+            (r) => r.userId === userId
+          );
+          setUserReview(userReviewData || null);
+        }
+      } catch (err) {
+        console.error('Error fetching reviews:', err);
+        setError('Failed to load reviews');
+        // Fallback to dummy data
+        const dummyBook = getBookById(bookId);
+        setBook(dummyBook);
+        const filteredReviews = dummyReviews.filter((r) => r.bookId === bookId);
+        setBookReviews(filteredReviews);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [bookId, userId, isReader]);
 
   const averageRating = useMemo(() => {
     if (bookReviews.length === 0) return 0;
@@ -43,20 +99,107 @@ const ReviewsScreen = ({ route, navigation }) => {
     return distribution;
   }, [bookReviews]);
 
-  const formatDate = (dateString) => {
+  const formatDate = useCallback((dateString) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
     });
-  };
+  }, []);
 
-  const renderStars = (rating) => {
+  const renderStars = useCallback((rating) => {
     return '⭐'.repeat(rating) + '☆'.repeat(5 - rating);
-  };
+  }, []);
 
-  const styles = StyleSheet.create({
+  const handleOpenReviewModal = useCallback(() => {
+    if (userReview) {
+      // Pre-fill form with existing review
+      setReviewForm({
+        rating: userReview.rating,
+        comment: userReview.comment || '',
+      });
+    } else {
+      setReviewForm({ rating: 0, comment: '' });
+    }
+    setShowReviewModal(true);
+  }, [userReview]);
+
+  const handleSubmitReview = useCallback(async () => {
+    if (!reviewForm.rating || reviewForm.rating < 1 || reviewForm.rating > 5) {
+      Alert.alert('Error', 'Please select a rating (1-5 stars)');
+      return;
+    }
+
+    if (!userId || !bookId) {
+      Alert.alert('Error', 'Please login to submit a review');
+      return;
+    }
+
+    setSubmittingReview(true);
+
+    try {
+      if (userReview) {
+        // Update existing review
+        await apiClient.updateReview(userReview.id, reviewForm.rating, reviewForm.comment);
+        Alert.alert('Success', 'Review updated successfully!');
+      } else {
+        // Create new review
+        await apiClient.createReview(bookId, userId, reviewForm.rating, reviewForm.comment);
+        Alert.alert('Success', 'Review submitted successfully!');
+      }
+
+      setShowReviewModal(false);
+      setReviewForm({ rating: 0, comment: '' });
+
+      // Refresh reviews
+      const reviewsResponse = await apiClient.getReviews(bookId);
+      setBookReviews(reviewsResponse.reviews || []);
+      
+      // Update user review
+      const updatedUserReview = reviewsResponse.reviews?.find(
+        (r) => r.userId === userId
+      );
+      setUserReview(updatedUserReview || null);
+    } catch (error) {
+      console.error('Error submitting review:', error);
+      Alert.alert('Error', error.message || 'Failed to submit review. Please try again.');
+    } finally {
+      setSubmittingReview(false);
+    }
+  }, [reviewForm, userId, bookId, userReview]);
+
+  const handleDeleteReview = useCallback(async () => {
+    if (!userReview) return;
+
+    Alert.alert(
+      'Delete Review',
+      'Are you sure you want to delete your review?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await apiClient.deleteReview(userReview.id);
+              Alert.alert('Success', 'Review deleted successfully!');
+              
+              // Refresh reviews
+              const reviewsResponse = await apiClient.getReviews(bookId);
+              setBookReviews(reviewsResponse.reviews || []);
+              setUserReview(null);
+            } catch (error) {
+              console.error('Error deleting review:', error);
+              Alert.alert('Error', 'Failed to delete review. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  }, [userReview, bookId]);
+
+  const styles = useMemo(() => StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: themeColors.background.primary,
@@ -76,10 +219,24 @@ const ReviewsScreen = ({ route, navigation }) => {
       fontSize: 14 * fontSizeMultiplier,
       color: themeColors.text.secondary,
     },
+    writeReviewButton: {
+      backgroundColor: themeColors.primary.main,
+      margin: 20,
+      marginBottom: 12,
+      borderRadius: 12,
+      padding: 16,
+      alignItems: 'center',
+    },
+    writeReviewButtonText: {
+      color: themeColors.text.light,
+      fontSize: 16 * fontSizeMultiplier,
+      fontWeight: '600',
+    },
     summaryCard: {
       backgroundColor: themeColors.card?.background || themeColors.background.secondary,
       margin: 20,
       marginBottom: 12,
+      marginTop: 0,
       borderRadius: 12,
       padding: 16,
       borderWidth: 1,
@@ -143,6 +300,9 @@ const ReviewsScreen = ({ route, navigation }) => {
       textAlign: 'right',
     },
     reviewsHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
       paddingHorizontal: 20,
       paddingBottom: 12,
     },
@@ -257,48 +417,143 @@ const ReviewsScreen = ({ route, navigation }) => {
       color: themeColors.text.secondary,
       textAlign: 'center',
     },
-  });
+    // Modal styles
+    modalContainer: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    modalContent: {
+      backgroundColor: themeColors.background.primary,
+      borderRadius: 16,
+      padding: 24,
+      width: '90%',
+      maxHeight: '80%',
+    },
+    modalTitle: {
+      fontSize: 20 * fontSizeMultiplier,
+      fontWeight: 'bold',
+      color: themeColors.text.primary,
+      marginBottom: 20,
+    },
+    ratingInputContainer: {
+      marginBottom: 20,
+    },
+    ratingInputLabel: {
+      fontSize: 16 * fontSizeMultiplier,
+      fontWeight: '600',
+      color: themeColors.text.primary,
+      marginBottom: 12,
+    },
+    starContainer: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    starButton: {
+      fontSize: 32 * fontSizeMultiplier,
+    },
+    commentInput: {
+      backgroundColor: themeColors.input.background,
+      borderWidth: 1,
+      borderColor: themeColors.input.border,
+      borderRadius: 8,
+      padding: 12,
+      fontSize: 16 * fontSizeMultiplier,
+      color: themeColors.input.text,
+      minHeight: 100,
+      textAlignVertical: 'top',
+      marginBottom: 20,
+    },
+    modalButtons: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    modalButton: {
+      flex: 1,
+      padding: 16,
+      borderRadius: 8,
+      alignItems: 'center',
+    },
+    cancelButton: {
+      backgroundColor: themeColors.background.secondary,
+    },
+    submitButton: {
+      backgroundColor: themeColors.primary.main,
+    },
+    modalButtonText: {
+      fontSize: 16 * fontSizeMultiplier,
+      fontWeight: '600',
+    },
+    cancelButtonText: {
+      color: themeColors.text.primary,
+    },
+    submitButtonText: {
+      color: themeColors.text.light,
+    },
+  }), [themeColors, fontSizeMultiplier]);
 
-  const renderReviewItem = ({ item }) => (
-    <View style={styles.reviewCard}>
-      <View style={styles.reviewHeader}>
-        <View style={styles.userInfo}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {item.userName.charAt(0).toUpperCase()}
-            </Text>
-          </View>
-          <View>
-            <View style={styles.userNameRow}>
-              <Text style={styles.userName}>{item.userName}</Text>
-              {item.verified && (
-                <Text style={styles.verifiedBadge}>✓ Verified</Text>
-              )}
+  const renderReviewItem = useCallback(({ item }) => {
+    const isUserReview = userId && item.userId === userId;
+    
+    return (
+      <View style={styles.reviewCard}>
+        <View style={styles.reviewHeader}>
+          <View style={styles.userInfo}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>
+                {item.userName?.charAt(0)?.toUpperCase() || 'U'}
+              </Text>
             </View>
-            <Text style={styles.reviewDate}>{formatDate(item.date)}</Text>
+            <View>
+              <View style={styles.userNameRow}>
+                <Text style={styles.userName}>{item.userName || 'Anonymous'}</Text>
+                {item.verified && (
+                  <Text style={styles.verifiedBadge}>✓ Verified</Text>
+                )}
+              </View>
+              <Text style={styles.reviewDate}>{formatDate(item.date || item.created_at)}</Text>
+            </View>
+          </View>
+          <View style={styles.ratingContainer}>
+            <Text style={styles.ratingStars}>
+              {renderStars(item.rating)}
+            </Text>
+            <Text style={styles.ratingNumber}>{item.rating}.0</Text>
           </View>
         </View>
-        <View style={styles.ratingContainer}>
-          <Text style={styles.ratingStars}>
-            {renderStars(item.rating)}
-          </Text>
-          <Text style={styles.ratingNumber}>{item.rating}.0</Text>
+        {item.comment && (
+          <Text style={styles.reviewComment}>{item.comment}</Text>
+        )}
+        <View style={styles.reviewActions}>
+          <TouchableOpacity style={styles.actionButton}>
+            <Text style={styles.actionText}>👍 {item.likes || 0}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionButton}>
+            <Text style={styles.actionText}>👎 {item.dislikes || 0}</Text>
+          </TouchableOpacity>
+          {isUserReview && (
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={handleDeleteReview}
+            >
+              <Text style={[styles.actionText, { color: themeColors.error || '#F44336' }]}>
+                Delete
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
-      <Text style={styles.reviewComment}>{item.comment}</Text>
-      <View style={styles.reviewActions}>
-        <TouchableOpacity style={styles.actionButton}>
-          <Text style={styles.actionText}>👍 {item.likes}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.actionButton}>
-          <Text style={styles.actionText}>👎 {item.dislikes}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.actionButton}>
-          <Text style={styles.actionText}>Reply</Text>
-        </TouchableOpacity>
+    );
+  }, [userId, styles, formatDate, renderStars, handleDeleteReview, themeColors.error]);
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={themeColors.primary.main} />
       </View>
-    </View>
-  );
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -306,8 +561,20 @@ const ReviewsScreen = ({ route, navigation }) => {
       {book && (
         <View style={styles.bookHeader}>
           <Text style={styles.bookTitle}>{book.title}</Text>
-          <Text style={styles.bookAuthor}>By {book.author.name}</Text>
+          <Text style={styles.bookAuthor}>By {book.author?.name || book.author_name || 'Unknown Author'}</Text>
         </View>
+      )}
+
+      {/* Write Review Button - Only for readers */}
+      {isReader && userId && (
+        <TouchableOpacity
+          style={styles.writeReviewButton}
+          onPress={handleOpenReviewModal}
+        >
+          <Text style={styles.writeReviewButtonText}>
+            {userReview ? '✏️ Edit Your Review' : '⭐ Write a Review'}
+          </Text>
+        </TouchableOpacity>
       )}
 
       {/* Rating Summary */}
@@ -355,7 +622,13 @@ const ReviewsScreen = ({ route, navigation }) => {
           All Reviews ({bookReviews.length})
         </Text>
       </View>
-      {bookReviews.length > 0 ? (
+      {error ? (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyIcon}>⚠️</Text>
+          <Text style={styles.emptyText}>Error</Text>
+          <Text style={styles.emptySubtext}>{error}</Text>
+        </View>
+      ) : bookReviews.length > 0 ? (
         <FlatList
           data={bookReviews}
           renderItem={renderReviewItem}
@@ -368,13 +641,77 @@ const ReviewsScreen = ({ route, navigation }) => {
           <Text style={styles.emptyIcon}>💬</Text>
           <Text style={styles.emptyText}>No reviews yet</Text>
           <Text style={styles.emptySubtext}>
-            Be the first to review this book!
+            {isReader ? 'Be the first to review this book!' : 'No reviews available for this book.'}
           </Text>
         </View>
       )}
+
+      {/* Review Modal */}
+      <Modal
+        visible={showReviewModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowReviewModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>
+              {userReview ? 'Edit Your Review' : 'Write a Review'}
+            </Text>
+
+            <View style={styles.ratingInputContainer}>
+              <Text style={styles.ratingInputLabel}>Rating *</Text>
+              <View style={styles.starContainer}>
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <TouchableOpacity
+                    key={star}
+                    onPress={() => setReviewForm({ ...reviewForm, rating: star })}
+                  >
+                    <Text style={styles.starButton}>
+                      {star <= reviewForm.rating ? '⭐' : '☆'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <TextInput
+              style={styles.commentInput}
+              placeholder="Write your review (optional)"
+              placeholderTextColor={themeColors.input.placeholder}
+              value={reviewForm.comment}
+              onChangeText={(text) => setReviewForm({ ...reviewForm, comment: text })}
+              multiline
+              numberOfLines={4}
+            />
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setShowReviewModal(false)}
+                disabled={submittingReview}
+              >
+                <Text style={[styles.modalButtonText, styles.cancelButtonText]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.submitButton]}
+                onPress={handleSubmitReview}
+                disabled={submittingReview || !reviewForm.rating}
+              >
+                {submittingReview ? (
+                  <ActivityIndicator color={themeColors.text.light} />
+                ) : (
+                  <Text style={[styles.modalButtonText, styles.submitButtonText]}>
+                    {userReview ? 'Update' : 'Submit'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
 
 export default ReviewsScreen;
-

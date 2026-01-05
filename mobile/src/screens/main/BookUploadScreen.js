@@ -3,7 +3,7 @@
  * For authors to upload their books with progress tracking
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback, memo } from 'react';
 import {
   View,
   Text,
@@ -16,11 +16,21 @@ import {
   Image,
   Platform,
 } from 'react-native';
+import DocumentPicker from 'react-native-document-picker';
+import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
 import Header from '../../components/common/Header';
 import { categories } from '../../services/dummyData';
 import { useSettings } from '../../context/SettingsContext';
 import { useAuth } from '../../context/AuthContext';
 import apiClient from '../../services/api';
+import {
+  requestPermissionWithFallback,
+  PERMISSIONS,
+  checkStoragePermission,
+  checkCameraPermission,
+  needsStoragePermissionForDocuments,
+  requestPermissionIfNeeded,
+} from '../../utils/permissions';
 
 const BookUploadScreen = ({ navigation }) => {
   const { getThemeColors, getFontSizeMultiplier } = useSettings();
@@ -43,12 +53,13 @@ const BookUploadScreen = ({ navigation }) => {
     isbn: '',
   });
 
-  const handleInputChange = (field, value) => {
-    setFormData({
-      ...formData,
+  const handleInputChange = useCallback((field, value) => {
+    setFormData((prev) => ({
+      ...prev,
       [field]: value,
-    });
-  };
+    }));
+  }, []);
+
 
   const handleImagePicker = () => {
     // Show options for image selection
@@ -73,34 +84,187 @@ const BookUploadScreen = ({ navigation }) => {
     );
   };
 
-  const selectImageFromCamera = () => {
-    // TODO: Implement actual camera functionality
-    // For now, simulate image selection
-    // In production, use: react-native-image-picker or expo-image-picker
-    const newImage = {
-      id: Date.now().toString(),
-      uri: `https://images.unsplash.com/photo-${Date.now()}?w=400&h=600&fit=crop`,
-      type: 'image/jpeg',
-      name: `cover_${Date.now()}.jpg`,
-    };
-    setCoverImages([...coverImages, newImage]);
+  const selectImageFromCamera = async () => {
+    const hasPermission = await requestPermissionWithFallback(
+      PERMISSIONS.CAMERA,
+      'Camera'
+    );
+    if (!hasPermission) {
+      return;
+    }
+
+    launchCamera(
+      {
+        mediaType: 'photo',
+        quality: 0.8,
+        maxWidth: 2000,
+        maxHeight: 2000,
+      },
+      (response) => {
+        if (response.didCancel) {
+          return;
+        }
+        if (response.errorMessage) {
+          Alert.alert('Error', response.errorMessage);
+          return;
+        }
+        if (response.assets && response.assets[0]) {
+          const asset = response.assets[0];
+          const newImage = {
+            id: Date.now().toString(),
+            uri: asset.uri || '',
+            type: asset.type || 'image/jpeg',
+            name: asset.fileName || `cover_${Date.now()}.jpg`,
+            file: {
+              uri: asset.uri || '',
+              type: asset.type || 'image/jpeg',
+              name: asset.fileName || `cover_${Date.now()}.jpg`,
+            },
+          };
+          setCoverImages([...coverImages, newImage]);
+        }
+      }
+    );
   };
 
-  const selectImageFromGallery = () => {
-    // TODO: Implement actual gallery picker functionality
-    // For now, simulate image selection
-    // In production, use: react-native-image-picker or expo-image-picker
-    const newImage = {
-      id: Date.now().toString(),
-      uri: `https://images.unsplash.com/photo-${Date.now()}?w=400&h=600&fit=crop`,
-      type: 'image/jpeg',
-      name: `cover_${Date.now()}.jpg`,
-    };
-    setCoverImages([...coverImages, newImage]);
+  const selectImageFromGallery = async () => {
+    const hasPermission = await requestPermissionWithFallback(
+      PERMISSIONS.STORAGE,
+      'Storage'
+    );
+    if (!hasPermission) {
+      return;
+    }
+
+    launchImageLibrary(
+      {
+        mediaType: 'photo',
+        quality: 0.8,
+        selectionLimit: 10, // Allow multiple images
+        maxWidth: 2000,
+        maxHeight: 2000,
+      },
+      (response) => {
+        if (response.didCancel) {
+          return;
+        }
+        if (response.errorMessage) {
+          Alert.alert('Error', response.errorMessage);
+          return;
+        }
+        if (response.assets && response.assets.length > 0) {
+          const newImages = response.assets.map((asset, index) => ({
+            id: `${Date.now()}_${index}`,
+            uri: asset.uri || '',
+            type: asset.type || 'image/jpeg',
+            name: asset.fileName || `cover_${Date.now()}_${index}.jpg`,
+            file: {
+              uri: asset.uri || '',
+              type: asset.type || 'image/jpeg',
+              name: asset.fileName || `cover_${Date.now()}_${index}.jpg`,
+            },
+          }));
+          setCoverImages([...coverImages, ...newImages]);
+        }
+      }
+    );
   };
 
   const removeImage = (imageId) => {
     setCoverImages(coverImages.filter((img) => img.id !== imageId));
+  };
+
+  const handleDocumentPicker = async () => {
+    try {
+      // On Android 13+, document picker doesn't need storage permission
+      // It uses the system file picker which doesn't require explicit permission
+      if (needsStoragePermissionForDocuments()) {
+        const hasPermission = await requestPermissionWithFallback(
+          PERMISSIONS.STORAGE,
+          'Storage'
+        );
+        if (!hasPermission) {
+          return;
+        }
+      }
+
+      const result = await DocumentPicker.pick({
+        type: [DocumentPicker.types.pdf, DocumentPicker.types.plainText],
+        copyTo: 'cachesDirectory',
+      });
+
+      if (result && result[0]) {
+        const file = result[0];
+        setPdfFile({
+          uri: file.fileCopyUri || file.uri,
+          name: file.name || 'book.pdf',
+          type: file.type || 'application/pdf',
+          size: file.size,
+          file: {
+            uri: file.fileCopyUri || file.uri,
+            type: file.type || 'application/pdf',
+            name: file.name || 'book.pdf',
+          },
+        });
+      }
+    } catch (err) {
+      if (DocumentPicker.isCancel(err)) {
+        // User cancelled the picker
+        return;
+      } else {
+        console.error('Error picking document:', err);
+        Alert.alert('Error', 'Failed to select file. Please try again.');
+      }
+    }
+  };
+
+  const handleAudioPicker = async () => {
+    try {
+      // On Android 13+, document picker doesn't need storage permission
+      if (needsStoragePermissionForDocuments()) {
+        const hasPermission = await requestPermissionWithFallback(
+          PERMISSIONS.STORAGE,
+          'Storage'
+        );
+        if (!hasPermission) {
+          return;
+        }
+      }
+
+      const result = await DocumentPicker.pick({
+        type: [
+          DocumentPicker.types.audio,
+          'audio/mpeg',
+          'audio/mp3',
+          'audio/m4a',
+          'audio/wav',
+        ],
+        copyTo: 'cachesDirectory',
+      });
+
+      if (result && result[0]) {
+        const file = result[0];
+        setAudioFile({
+          uri: file.fileCopyUri || file.uri,
+          name: file.name || 'audio.mp3',
+          type: file.type || 'audio/mpeg',
+          size: file.size,
+          file: {
+            uri: file.fileCopyUri || file.uri,
+            type: file.type || 'audio/mpeg',
+            name: file.name || 'audio.mp3',
+          },
+        });
+      }
+    } catch (err) {
+      if (DocumentPicker.isCancel(err)) {
+        // User cancelled the picker
+        return;
+      } else {
+        console.error('Error picking audio:', err);
+        Alert.alert('Error', 'Failed to select audio file. Please try again.');
+      }
+    }
   };
 
   const uploadBook = async () => {
@@ -126,7 +290,12 @@ const BookUploadScreen = ({ navigation }) => {
       // Step 1: Upload PDF/Audio file
       if (bookType === 'book' && pdfFile) {
         setUploadProgress(Math.round((currentStep / totalSteps) * 100));
-        const pdfResult = await apiClient.uploadFile(pdfFile, 'books', 'pdfs');
+        const fileToUpload = pdfFile.file || {
+          uri: pdfFile.uri,
+          type: pdfFile.type || 'application/pdf',
+          name: pdfFile.name || 'book.pdf',
+        };
+        const pdfResult = await apiClient.uploadFile(fileToUpload, 'books', 'pdfs');
         const pdfUrl = pdfResult.url;
         currentStep++;
 
@@ -203,7 +372,12 @@ const BookUploadScreen = ({ navigation }) => {
       } else if (bookType === 'audio' && audioFile) {
         // Step 1: Upload audio file
         setUploadProgress(Math.round((currentStep / totalSteps) * 100));
-        const audioResult = await apiClient.uploadFile(audioFile, 'audio-books', 'audio');
+        const fileToUpload = audioFile.file || {
+          uri: audioFile.uri,
+          type: audioFile.type || 'audio/mpeg',
+          name: audioFile.name || 'audio.mp3',
+        };
+        const audioResult = await apiClient.uploadFile(fileToUpload, 'audio-books', 'audio');
         const audioUrl = audioResult.url;
         currentStep++;
 
@@ -316,23 +490,38 @@ const BookUploadScreen = ({ navigation }) => {
     uploadBook();
   };
 
-  const InputField = ({ label, value, onChangeText, placeholder, keyboardType = 'default', multiline = false }) => (
-    <View style={styles.inputGroup}>
-      <Text style={styles.label}>{label}</Text>
-      <TextInput
-        style={[styles.input, multiline && styles.textArea]}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={themeColors.input.placeholder}
-        keyboardType={keyboardType}
-        multiline={multiline}
-        numberOfLines={multiline ? 4 : 1}
-      />
-    </View>
-  );
+  // Create stable callback functions for each input field
+  const handleTitleChange = useCallback((value) => handleInputChange('title', value), [handleInputChange]);
+  const handleDescriptionChange = useCallback((value) => handleInputChange('description', value), [handleInputChange]);
+  const handlePriceChange = useCallback((value) => handleInputChange('price', value), [handleInputChange]);
+  const handlePagesChange = useCallback((value) => handleInputChange('pages', value), [handleInputChange]);
+  const handleIsbnChange = useCallback((value) => handleInputChange('isbn', value), [handleInputChange]);
 
-  const styles = StyleSheet.create({
+  // Memoize InputField component to prevent re-creation
+  const InputField = useMemo(() => {
+    return memo(({ label, value, onChangeText, placeholder, keyboardType = 'default', multiline = false }) => {
+      const inputStyles = useMemo(() => [styles.input, multiline && styles.textArea], [multiline]);
+      
+      return (
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>{label}</Text>
+          <TextInput
+            style={inputStyles}
+            value={value}
+            onChangeText={onChangeText}
+            placeholder={placeholder}
+            placeholderTextColor={themeColors.input.placeholder}
+            keyboardType={keyboardType}
+            multiline={multiline}
+            numberOfLines={multiline ? 4 : 1}
+          />
+        </View>
+      );
+    });
+  }, [styles, themeColors.input.placeholder]);
+
+  // Memoize styles to prevent re-creation on every render
+  const styles = useMemo(() => StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: themeColors.background.primary,
@@ -666,7 +855,7 @@ const BookUploadScreen = ({ navigation }) => {
       fontSize: 12 * fontSizeMultiplier,
       fontWeight: '600',
     },
-  });
+  }), [themeColors, fontSizeMultiplier]);
 
   return (
     <View style={styles.container}>
@@ -678,14 +867,14 @@ const BookUploadScreen = ({ navigation }) => {
           <InputField
             label="Book Title *"
             value={formData.title}
-            onChangeText={(value) => handleInputChange('title', value)}
+            onChangeText={handleTitleChange}
             placeholder="Enter book title"
           />
 
           <InputField
             label="Description *"
             value={formData.description}
-            onChangeText={(value) => handleInputChange('description', value)}
+            onChangeText={handleDescriptionChange}
             placeholder="Enter book description"
             multiline={true}
           />
@@ -725,7 +914,7 @@ const BookUploadScreen = ({ navigation }) => {
               <InputField
                 label="Price (₹) *"
                 value={formData.price}
-                onChangeText={(value) => handleInputChange('price', value)}
+                onChangeText={handlePriceChange}
                 placeholder="0"
                 keyboardType="numeric"
               />
@@ -734,7 +923,7 @@ const BookUploadScreen = ({ navigation }) => {
               <InputField
                 label="Pages"
                 value={formData.pages}
-                onChangeText={(value) => handleInputChange('pages', value)}
+                onChangeText={handlePagesChange}
                 placeholder="0"
                 keyboardType="numeric"
               />
@@ -785,7 +974,7 @@ const BookUploadScreen = ({ navigation }) => {
               <InputField
                 label="ISBN"
                 value={formData.isbn}
-                onChangeText={(value) => handleInputChange('isbn', value)}
+                onChangeText={handleIsbnChange}
                 placeholder="978-1234567890"
               />
             </View>
@@ -854,19 +1043,21 @@ const BookUploadScreen = ({ navigation }) => {
                 <Text style={styles.sectionTitle}>Upload Book File</Text>
                 <TouchableOpacity
                   style={styles.uploadButton}
-                  onPress={() => {
-                    // TODO: Use react-native-document-picker or expo-document-picker
-                    // For now, simulate file selection
-                    Alert.alert('Info', 'File picker will be implemented with react-native-document-picker');
-                    // Example: setPdfFile({ uri: 'file://...', name: 'book.pdf', type: 'application/pdf' });
-                  }}
+                  onPress={handleDocumentPicker}
                 >
-                  <Text style={styles.uploadButtonText}>📄 Choose File</Text>
+                  <Text style={styles.uploadButtonText}>📄 Choose PDF File</Text>
                   <Text style={styles.uploadHint}>PDF, EPUB, MOBI formats supported</Text>
                 </TouchableOpacity>
                 {pdfFile && (
                   <View style={styles.audioFileInfo}>
-                    <Text style={styles.audioFileName}>📄 {pdfFile.name || 'book.pdf'}</Text>
+                    <Text style={styles.audioFileName} numberOfLines={1}>
+                      📄 {pdfFile.name || 'book.pdf'}
+                    </Text>
+                    {pdfFile.size && (
+                      <Text style={styles.audioFileSize}>
+                        {(pdfFile.size / (1024 * 1024)).toFixed(2)} MB
+                      </Text>
+                    )}
                     <TouchableOpacity
                       onPress={() => setPdfFile(null)}
                       style={styles.removeAudioButton}
@@ -922,33 +1113,36 @@ const BookUploadScreen = ({ navigation }) => {
               </View>
             </>
           ) : (
-            <View style={styles.uploadSection}>
-              <Text style={styles.sectionTitle}>Upload Audio File (Podcast)</Text>
-              <Text style={styles.uploadHint} style={{ marginBottom: 12, color: themeColors.primary.main }}>
-                ⚠️ Audio books are free only. All audio content will be available to all readers.
-              </Text>
-              <TouchableOpacity
-                style={styles.uploadButton}
-                onPress={() => {
-                  // Simulate audio picker - in real app, use react-native-document-picker
-                  setAudioFile({ name: 'podcast.mp3', size: '15.2 MB' });
-                }}
-              >
-                <Text style={styles.uploadButtonText}>🎙️ Choose Audio File</Text>
-                <Text style={styles.uploadHint}>MP3, M4A, WAV formats supported</Text>
-              </TouchableOpacity>
-              {audioFile && (
-                <View style={styles.audioFileInfo}>
-                  <Text style={styles.audioFileName}>📄 {audioFile.name}</Text>
-                  <Text style={styles.audioFileSize}>{audioFile.size}</Text>
-                  <TouchableOpacity
-                    onPress={() => setAudioFile(null)}
-                    style={styles.removeAudioButton}
-                  >
-                    <Text style={styles.removeAudioText}>Remove</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
+              <View style={styles.uploadSection}>
+                <Text style={styles.sectionTitle}>Upload Audio File (Podcast)</Text>
+                <Text style={[styles.uploadHint, { marginBottom: 12, color: themeColors.primary.main }]}>
+                  ⚠️ Audio books are free only. All audio content will be available to all readers.
+                </Text>
+                <TouchableOpacity
+                  style={styles.uploadButton}
+                  onPress={handleAudioPicker}
+                >
+                  <Text style={styles.uploadButtonText}>🎙️ Choose Audio File</Text>
+                  <Text style={styles.uploadHint}>MP3, M4A, WAV formats supported</Text>
+                </TouchableOpacity>
+                {audioFile && (
+                  <View style={styles.audioFileInfo}>
+                    <Text style={styles.audioFileName} numberOfLines={1}>
+                      🎙️ {audioFile.name || 'audio.mp3'}
+                    </Text>
+                    {audioFile.size && (
+                      <Text style={styles.audioFileSize}>
+                        {(audioFile.size / (1024 * 1024)).toFixed(2)} MB
+                      </Text>
+                    )}
+                    <TouchableOpacity
+                      onPress={() => setAudioFile(null)}
+                      style={styles.removeAudioButton}
+                    >
+                      <Text style={styles.removeAudioText}>Remove</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
               <View style={styles.uploadSection}>
                 <Text style={styles.sectionTitle}>Cover Image for Podcast</Text>
                 <TouchableOpacity

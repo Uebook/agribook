@@ -5,6 +5,7 @@
 
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { requestAllPermissions } from '../utils/permissions';
 
 const AuthContext = createContext();
 
@@ -53,6 +54,14 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (role, interests = [], id = null, user = null) => {
     try {
+      // Request all app permissions on login
+      try {
+        await requestAllPermissions();
+      } catch (permError) {
+        console.warn('Error requesting permissions:', permError);
+        // Continue with login even if permissions fail
+      }
+
       // Save auth data
       const authData = {
         role,

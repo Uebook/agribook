@@ -132,6 +132,12 @@ class ApiClient {
     });
   }
 
+  async deleteUser(id) {
+    return this.request(`/api/users/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
   // Audio Books API
   async getAudioBooks(params = {}) {
     const queryParams = new URLSearchParams();
@@ -158,11 +164,19 @@ class ApiClient {
   // Upload API
   async uploadFile(file, bucket, folder) {
     const formData = new FormData();
+    
+    // Handle file URI - support both file:// and content:// URIs
+    const fileUri = file.uri || file.path;
+    const fileName = file.name || (fileUri ? fileUri.split('/').pop() : 'file.pdf');
+    const fileType = file.type || 'application/pdf';
+
+    // For React Native, we need to append the file properly
     formData.append('file', {
-      uri: file.uri || file.path,
-      type: file.type || 'application/pdf',
-      name: file.name || 'file.pdf',
+      uri: fileUri,
+      type: fileType,
+      name: fileName,
     });
+    
     formData.append('bucket', bucket);
     if (folder) {
       formData.append('folder', folder);
@@ -289,6 +303,49 @@ class ApiClient {
         payment_method: paymentMethod,
         transaction_id: transactionId,
       }),
+    });
+  }
+
+  // Curriculum API
+  async getCurriculums(params = {}) {
+    const queryParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        queryParams.append(key, value.toString());
+      }
+    });
+    const query = queryParams.toString();
+    return this.request(`/api/curriculum${query ? `?${query}` : ''}`);
+  }
+
+  // Reviews API
+  async getReviews(bookId, params = {}) {
+    const queryParams = new URLSearchParams({ bookId });
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        queryParams.append(key, value.toString());
+      }
+    });
+    return this.request(`/api/reviews?${queryParams.toString()}`);
+  }
+
+  async createReview(bookId, userId, rating, comment) {
+    return this.request('/api/reviews', {
+      method: 'POST',
+      body: JSON.stringify({ bookId, userId, rating, comment }),
+    });
+  }
+
+  async updateReview(reviewId, rating, comment) {
+    return this.request(`/api/reviews/${reviewId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ rating, comment }),
+    });
+  }
+
+  async deleteReview(reviewId) {
+    return this.request(`/api/reviews/${reviewId}`, {
+      method: 'DELETE',
     });
   }
 }

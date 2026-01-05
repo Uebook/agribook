@@ -3,7 +3,7 @@
  * Allows users to edit their profile information
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import {
   View,
   Text,
@@ -15,11 +15,63 @@ import {
   Image,
   ActivityIndicator,
 } from 'react-native';
+import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
 import Header from '../../components/common/Header';
 import { userProfile } from '../../services/dummyData';
 import { useAuth } from '../../context/AuthContext';
 import { useSettings } from '../../context/SettingsContext';
 import apiClient from '../../services/api';
+import {
+  requestPermissionWithFallback,
+  PERMISSIONS,
+} from '../../utils/permissions';
+
+// Create InputField component OUTSIDE to prevent recreation
+const InputField = memo(({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  keyboardType = 'default',
+  multiline = false,
+  required = false,
+  styles,
+  placeholderColor,
+  loading = false,
+}) => {
+  return (
+    <View style={styles.inputGroup}>
+      <Text style={styles.label}>
+        {label} {required && <Text style={styles.required}>*</Text>}
+      </Text>
+      <TextInput
+        style={[styles.input, multiline && styles.textArea]}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={placeholderColor}
+        keyboardType={keyboardType}
+        multiline={multiline}
+        numberOfLines={multiline ? 4 : 1}
+        blurOnSubmit={!multiline}
+        returnKeyType={multiline ? 'default' : 'next'}
+        editable={!loading}
+      />
+    </View>
+  );
+}, (prevProps, nextProps) => {
+  // Only re-render if value or other important props change
+  // onChangeText is stable via useCallback, so we don't need to compare it
+  return (
+    prevProps.value === nextProps.value &&
+    prevProps.label === nextProps.label &&
+    prevProps.placeholder === nextProps.placeholder &&
+    prevProps.keyboardType === nextProps.keyboardType &&
+    prevProps.multiline === nextProps.multiline &&
+    prevProps.required === nextProps.required &&
+    prevProps.loading === nextProps.loading
+  );
+});
 
 const EditProfileScreen = ({ navigation }) => {
   const { getThemeColors, getFontSizeMultiplier } = useSettings();
@@ -27,6 +79,9 @@ const EditProfileScreen = ({ navigation }) => {
   const fontSizeMultiplier = getFontSizeMultiplier();
   const { userRole, userData, userId, updateUserData } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarUri, setAvatarUri] = useState(userData?.avatar_url || null);
+  const [avatarFile, setAvatarFile] = useState(null); // Store selected file for upload
   const [formData, setFormData] = useState({
     name: userData?.name || userProfile.name,
     email: userData?.email || userProfile.email || '',
@@ -58,6 +113,7 @@ const EditProfileScreen = ({ navigation }) => {
               pincode: user.pincode || '',
               website: user.website || '',
             });
+            setAvatarUri(user.avatar_url || null);
           }
         } catch (error) {
           console.error('Error loading user data:', error);
@@ -67,96 +123,26 @@ const EditProfileScreen = ({ navigation }) => {
     loadUserData();
   }, [userId, userData]);
 
-  const handleInputChange = (field, value) => {
-    setFormData({
-      ...formData,
+  const handleInputChange = useCallback((field, value) => {
+    setFormData((prev) => ({
+      ...prev,
       [field]: value,
-    });
-  };
+    }));
+  }, []);
 
-  const handleSave = async () => {
-    // Validate form
-    if (!formData.name.trim()) {
-      Alert.alert('Error', 'Please enter your name');
-      return;
-    }
-    if (formData.email && !formData.email.includes('@')) {
-      Alert.alert('Error', 'Please enter a valid email address');
-      return;
-    }
-    if (formData.mobile && formData.mobile.length < 10) {
-      Alert.alert('Error', 'Please enter a valid mobile number');
-      return;
-    }
+  // Create stable callback functions for each input field
+  const handleNameChange = useCallback((value) => handleInputChange('name', value), [handleInputChange]);
+  const handleEmailChange = useCallback((value) => handleInputChange('email', value), [handleInputChange]);
+  const handleMobileChange = useCallback((value) => handleInputChange('mobile', value), [handleInputChange]);
+  const handleBioChange = useCallback((value) => handleInputChange('bio', value), [handleInputChange]);
+  const handleAddressChange = useCallback((value) => handleInputChange('address', value), [handleInputChange]);
+  const handleCityChange = useCallback((value) => handleInputChange('city', value), [handleInputChange]);
+  const handleStateChange = useCallback((value) => handleInputChange('state', value), [handleInputChange]);
+  const handlePincodeChange = useCallback((value) => handleInputChange('pincode', value), [handleInputChange]);
+  const handleWebsiteChange = useCallback((value) => handleInputChange('website', value), [handleInputChange]);
 
-    setLoading(true);
-
-    try {
-      // Update user via API
-      if (userId) {
-        const updatedUser = await apiClient.updateUser(userId, {
-          name: formData.name,
-          email: formData.email,
-          mobile: formData.mobile,
-          bio: formData.bio,
-          address: formData.address,
-          city: formData.city,
-          state: formData.state,
-          pincode: formData.pincode,
-          website: formData.website,
-        });
-
-        // Update local user data
-        await updateUserData(updatedUser.user);
-      } else {
-        // If no userId, just update local data
-        await updateUserData({
-          ...userData,
-          ...formData,
-        });
-      }
-
-      Alert.alert('Success', 'Profile updated successfully!', [
-        {
-          text: 'OK',
-          onPress: () => navigation.goBack(),
-        },
-      ]);
-    } catch (error) {
-      console.error('Error updating profile:', error);
-      Alert.alert('Error', error.message || 'Failed to update profile. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const InputField = ({
-    label,
-    value,
-    onChangeText,
-    placeholder,
-    keyboardType = 'default',
-    multiline = false,
-    required = false,
-  }) => (
-    <View style={styles.inputGroup}>
-      <Text style={styles.label}>
-        {label} {required && <Text style={styles.required}>*</Text>}
-      </Text>
-      <TextInput
-        style={[styles.input, multiline && styles.textArea]}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={themeColors.input.placeholder}
-        keyboardType={keyboardType}
-        multiline={multiline}
-        numberOfLines={multiline ? 4 : 1}
-      />
-    </View>
-  );
-
-  const styles = StyleSheet.create({
+  // Memoize styles FIRST to ensure it's stable before InputField uses it
+  const styles = useMemo(() => StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: themeColors.background.primary,
@@ -183,11 +169,27 @@ const EditProfileScreen = ({ navigation }) => {
       justifyContent: 'center',
       alignItems: 'center',
       marginBottom: 12,
+      overflow: 'hidden',
+      position: 'relative',
+    },
+    avatarImage: {
+      width: '100%',
+      height: '100%',
     },
     avatarText: {
       fontSize: 36 * fontSizeMultiplier,
       fontWeight: 'bold',
       color: themeColors.text.light,
+    },
+    avatarLoadingOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
     },
     changePhotoButton: {
       paddingVertical: 8,
@@ -262,7 +264,205 @@ const EditProfileScreen = ({ navigation }) => {
       textAlign: 'center',
       lineHeight: 18 * fontSizeMultiplier,
     },
-  });
+  }), [themeColors, fontSizeMultiplier]);
+
+  // Memoize placeholder color separately
+  const placeholderColor = useMemo(() => themeColors.input.placeholder, [themeColors.input.placeholder]);
+
+  const selectImageFromCamera = useCallback(async () => {
+    const hasPermission = await requestPermissionWithFallback(
+      PERMISSIONS.CAMERA,
+      'Camera'
+    );
+    if (!hasPermission) {
+      return;
+    }
+
+    launchCamera(
+      {
+        mediaType: 'photo',
+        quality: 0.8,
+        maxWidth: 800,
+        maxHeight: 800,
+      },
+      (response) => {
+        if (response.didCancel) {
+          return;
+        }
+        if (response.errorMessage) {
+          Alert.alert('Error', response.errorMessage);
+          return;
+        }
+        if (response.assets && response.assets[0]) {
+          const asset = response.assets[0];
+          setAvatarUri(asset.uri || '');
+          setAvatarFile({
+            uri: asset.uri || '',
+            type: asset.type || 'image/jpeg',
+            name: asset.fileName || `avatar_${Date.now()}.jpg`,
+          });
+        }
+      }
+    );
+  }, []);
+
+  const selectImageFromGallery = useCallback(async () => {
+    const hasPermission = await requestPermissionWithFallback(
+      PERMISSIONS.STORAGE,
+      'Storage'
+    );
+    if (!hasPermission) {
+      return;
+    }
+
+    launchImageLibrary(
+      {
+        mediaType: 'photo',
+        quality: 0.8,
+        maxWidth: 800,
+        maxHeight: 800,
+      },
+      (response) => {
+        if (response.didCancel) {
+          return;
+        }
+        if (response.errorMessage) {
+          Alert.alert('Error', response.errorMessage);
+          return;
+        }
+        if (response.assets && response.assets[0]) {
+          const asset = response.assets[0];
+          setAvatarUri(asset.uri || '');
+          setAvatarFile({
+            uri: asset.uri || '',
+            type: asset.type || 'image/jpeg',
+            name: asset.fileName || `avatar_${Date.now()}.jpg`,
+          });
+        }
+      }
+    );
+  }, []);
+
+  const handleChangePhoto = useCallback(() => {
+    Alert.alert(
+      'Change Profile Photo',
+      'Choose an option',
+      [
+        {
+          text: 'Camera',
+          onPress: selectImageFromCamera,
+        },
+        {
+          text: 'Gallery',
+          onPress: selectImageFromGallery,
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ],
+      { cancelable: true }
+    );
+  }, [selectImageFromCamera, selectImageFromGallery]);
+
+  const handleSave = async () => {
+    // Validate form
+    if (!formData.name.trim()) {
+      Alert.alert('Error', 'Please enter your name');
+      return;
+    }
+    if (formData.email && !formData.email.includes('@')) {
+      Alert.alert('Error', 'Please enter a valid email address');
+      return;
+    }
+    if (formData.mobile && formData.mobile.length < 10) {
+      Alert.alert('Error', 'Please enter a valid mobile number');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // Upload avatar if a new one was selected
+      let avatarUrl = avatarUri;
+      if (avatarFile && avatarFile.uri && !avatarFile.uri.startsWith('http')) {
+        // New image selected, upload it
+        setUploadingAvatar(true);
+        try {
+          const uploadResult = await apiClient.uploadFile(
+            avatarFile,
+            'avatars',
+            'users'
+          );
+          avatarUrl = uploadResult.url;
+          setAvatarUri(avatarUrl);
+        } catch (uploadError) {
+          console.error('Error uploading avatar:', uploadError);
+          Alert.alert('Error', 'Failed to upload profile photo. Profile will be updated without photo.');
+        } finally {
+          setUploadingAvatar(false);
+        }
+      }
+
+      // Update user via API
+      if (userId) {
+        const updatePayload = {
+          name: formData.name.trim(),
+          email: formData.email.trim() || null,
+          mobile: formData.mobile.trim() || null,
+          bio: formData.bio.trim() || null,
+          address: formData.address.trim() || null,
+          city: formData.city.trim() || null,
+          state: formData.state.trim() || null,
+          pincode: formData.pincode.trim() || null,
+          website: formData.website.trim() || null,
+        };
+
+        // Include avatar_url if we have one
+        if (avatarUrl) {
+          updatePayload.avatar_url = avatarUrl;
+        }
+
+        const response = await apiClient.updateUser(userId, updatePayload);
+
+        console.log('Update response:', response); // Debug log
+
+        // Update local user data - handle both response.user and direct user object
+        const updatedUserData = response.user || response;
+        if (updatedUserData) {
+          await updateUserData(updatedUserData);
+        } else {
+          console.warn('No user data in response:', response);
+          // Fallback: update with form data
+          await updateUserData({
+            ...userData,
+            ...formData,
+            avatar_url: avatarUrl,
+          });
+        }
+      } else {
+        // If no userId, just update local data
+        await updateUserData({
+          ...userData,
+          ...formData,
+          avatar_url: avatarUrl,
+        });
+      }
+
+      Alert.alert('Success', 'Profile updated successfully!', [
+        {
+          text: 'OK',
+          onPress: () => navigation.goBack(),
+        },
+      ]);
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      const errorMessage = error.message || error.error || 'Failed to update profile. Please try again.';
+      Alert.alert('Error', errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -273,17 +473,36 @@ const EditProfileScreen = ({ navigation }) => {
           <View style={styles.avatarSection}>
             <View style={styles.avatarContainer}>
               <View style={styles.avatar}>
-                <Text style={styles.avatarText}>
-                  {formData.name
-                    .split(' ')
-                    .map((n) => n[0])
-                    .join('')
-                    .toUpperCase()
-                    .slice(0, 2)}
-                </Text>
+                {avatarUri ? (
+                  <Image
+                    source={{ uri: avatarUri }}
+                    style={styles.avatarImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <Text style={styles.avatarText}>
+                    {formData.name
+                      .split(' ')
+                      .map((n) => n[0])
+                      .join('')
+                      .toUpperCase()
+                      .slice(0, 2)}
+                  </Text>
+                )}
+                {uploadingAvatar && (
+                  <View style={styles.avatarLoadingOverlay}>
+                    <ActivityIndicator size="small" color={themeColors.text.light} />
+                  </View>
+                )}
               </View>
-              <TouchableOpacity style={styles.changePhotoButton}>
-                <Text style={styles.changePhotoText}>Change Photo</Text>
+              <TouchableOpacity
+                style={styles.changePhotoButton}
+                onPress={handleChangePhoto}
+                disabled={uploadingAvatar || loading}
+              >
+                <Text style={styles.changePhotoText}>
+                  {uploadingAvatar ? 'Uploading...' : 'Change Photo'}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -294,36 +513,48 @@ const EditProfileScreen = ({ navigation }) => {
           <InputField
             label="Full Name"
             value={formData.name}
-            onChangeText={(value) => handleInputChange('name', value)}
+            onChangeText={handleNameChange}
             placeholder="Enter your full name"
             required={true}
+            styles={styles}
+            placeholderColor={placeholderColor}
+            loading={loading}
           />
 
           <InputField
             label="Email"
             value={formData.email}
-            onChangeText={(value) => handleInputChange('email', value)}
+            onChangeText={handleEmailChange}
             placeholder="Enter your email"
             keyboardType="email-address"
             required={true}
+            styles={styles}
+            placeholderColor={placeholderColor}
+            loading={loading}
           />
 
           <InputField
             label="Mobile Number"
             value={formData.mobile}
-            onChangeText={(value) => handleInputChange('mobile', value)}
+            onChangeText={handleMobileChange}
             placeholder="Enter your mobile number"
             keyboardType="phone-pad"
             required={true}
+            styles={styles}
+            placeholderColor={placeholderColor}
+            loading={loading}
           />
 
           {/* Bio Section */}
           <InputField
             label="Bio"
             value={formData.bio}
-            onChangeText={(value) => handleInputChange('bio', value)}
+            onChangeText={handleBioChange}
             placeholder="Tell us about yourself..."
             multiline={true}
+            styles={styles}
+            placeholderColor={placeholderColor}
+            loading={loading}
           />
 
           {/* Address Information */}
@@ -332,9 +563,12 @@ const EditProfileScreen = ({ navigation }) => {
           <InputField
             label="Address"
             value={formData.address}
-            onChangeText={(value) => handleInputChange('address', value)}
+            onChangeText={handleAddressChange}
             placeholder="Enter your address"
             multiline={true}
+            styles={styles}
+            placeholderColor={placeholderColor}
+            loading={loading}
           />
 
           <View style={styles.row}>
@@ -342,16 +576,22 @@ const EditProfileScreen = ({ navigation }) => {
               <InputField
                 label="City"
                 value={formData.city}
-                onChangeText={(value) => handleInputChange('city', value)}
+                onChangeText={handleCityChange}
                 placeholder="City"
+                styles={styles}
+                placeholderColor={placeholderColor}
+                loading={loading}
               />
             </View>
             <View style={styles.halfWidth}>
               <InputField
                 label="State"
                 value={formData.state}
-                onChangeText={(value) => handleInputChange('state', value)}
+                onChangeText={handleStateChange}
                 placeholder="State"
+                styles={styles}
+                placeholderColor={placeholderColor}
+                loading={loading}
               />
             </View>
           </View>
@@ -359,9 +599,12 @@ const EditProfileScreen = ({ navigation }) => {
           <InputField
             label="Pincode"
             value={formData.pincode}
-            onChangeText={(value) => handleInputChange('pincode', value)}
+            onChangeText={handlePincodeChange}
             placeholder="Enter pincode"
             keyboardType="numeric"
+            styles={styles}
+            placeholderColor={placeholderColor}
+            loading={loading}
           />
 
           {/* Additional Information */}
@@ -371,9 +614,12 @@ const EditProfileScreen = ({ navigation }) => {
               <InputField
                 label="Website"
                 value={formData.website}
-                onChangeText={(value) => handleInputChange('website', value)}
+                onChangeText={handleWebsiteChange}
                 placeholder="https://yourwebsite.com"
                 keyboardType="url"
+                styles={styles}
+                placeholderColor={placeholderColor}
+                loading={loading}
               />
             </>
           )}

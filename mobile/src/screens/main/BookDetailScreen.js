@@ -31,89 +31,14 @@ const BookDetailScreen = ({ route, navigation }) => {
   const [book, setBook] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isWishlisted, setIsWishlisted] = useState(false);
+  const [isPurchased, setIsPurchased] = useState(false);
+  const [checkingPurchase, setCheckingPurchase] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const screenWidth = Dimensions.get('window').width;
   const isAuthor = userRole === 'author';
   const isMyBook = isAuthor && userId && book?.author_id === userId;
 
-  const handleWishlistToggle = async () => {
-    // Only allow wishlist for readers viewing other authors' books
-    if (!userId || !bookId || isMyBook || userRole !== 'reader') {
-      return;
-    }
-    try {
-      if (isWishlisted) {
-        await apiClient.removeFromWishlist(userId, bookId);
-        setIsWishlisted(false);
-      } else {
-        await apiClient.addToWishlist(userId, bookId);
-        setIsWishlisted(true);
-      }
-    } catch (error) {
-      console.error('Error toggling wishlist:', error);
-      Alert.alert('Error', 'Failed to update wishlist');
-    }
-  };
-
-  // Check if book is in wishlist - only for readers viewing other authors' books
-  useEffect(() => {
-    const checkWishlist = async () => {
-      if (!userId || !bookId || isMyBook || userRole !== 'reader') return;
-      try {
-        const response = await apiClient.getWishlist(userId);
-        const wishlistBookIds = (response.books || []).map((b) => b.id);
-        setIsWishlisted(wishlistBookIds.includes(bookId));
-      } catch (error) {
-        console.error('Error checking wishlist:', error);
-      }
-    };
-    checkWishlist();
-  }, [userId, bookId, isMyBook, userRole]);
-
-  // Fetch book from API
-  useEffect(() => {
-    const fetchBook = async () => {
-      if (!bookId) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        setLoading(true);
-        const response = await apiClient.getBook(bookId);
-        setBook(response.book);
-      } catch (error) {
-        console.error('Error fetching book:', error);
-        // Fallback to dummy data
-        const dummyBook = getBookById(bookId) || getBookById('1');
-        setBook(dummyBook);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchBook();
-  }, [bookId]);
-
-  if (loading) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={themeColors.primary.main} />
-      </View>
-    );
-  }
-
-  if (!book) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 40 }]}>
-        <Text style={{ fontSize: 18, color: themeColors.text.secondary }}>Book not found</Text>
-      </View>
-    );
-  }
-
-  const coverImages = book.cover_images || (book.cover_image_url ? [book.cover_image_url] : [book.cover || 'https://via.placeholder.com/200']);
-  const authorName = book.author?.name || book.author_name || 'Unknown Author';
-
+  // Define styles BEFORE early returns to avoid "styles is undefined" error
   const styles = StyleSheet.create({
     container: {
       flex: 1,
@@ -322,6 +247,125 @@ const BookDetailScreen = ({ route, navigation }) => {
     },
   });
 
+  const handleWishlistToggle = async () => {
+    // Only allow wishlist for readers viewing other authors' books
+    if (!userId || !bookId || isMyBook || userRole !== 'reader') {
+      Alert.alert('Error', 'Please login as a reader to add to wishlist');
+      return;
+    }
+    try {
+      if (isWishlisted) {
+        const response = await apiClient.removeFromWishlist(userId, bookId);
+        // API returns { success: true } on success, or { error: ... } on failure
+        if (response.error) {
+          throw new Error(response.error);
+        }
+        setIsWishlisted(false);
+      } else {
+        const response = await apiClient.addToWishlist(userId, bookId);
+        // API returns { success: true } on success, or { error: ... } on failure
+        // Also handles case where book is already in wishlist (returns 200 with success: true)
+        if (response.error) {
+          throw new Error(response.error);
+        }
+        setIsWishlisted(true);
+      }
+    } catch (error) {
+      console.error('Error toggling wishlist:', error);
+      Alert.alert('Error', error.message || 'Failed to update wishlist');
+    }
+  };
+
+  // Check if book is in wishlist - only for readers viewing other authors' books
+  useEffect(() => {
+    const checkWishlist = async () => {
+      if (!userId || !bookId || isMyBook || userRole !== 'reader') return;
+      try {
+        const response = await apiClient.getWishlist(userId);
+        const wishlistBookIds = (response.books || []).map((b) => b.id);
+        setIsWishlisted(wishlistBookIds.includes(bookId));
+      } catch (error) {
+        console.error('Error checking wishlist:', error);
+      }
+    };
+    checkWishlist();
+  }, [userId, bookId, isMyBook, userRole]);
+
+  // Check if book is already purchased
+  useEffect(() => {
+    const checkPurchase = async () => {
+      if (!userId || !bookId || isMyBook || userRole !== 'reader') {
+        setIsPurchased(false);
+        return;
+      }
+      try {
+        setCheckingPurchase(true);
+        const response = await apiClient.getOrders(userId, { limit: 100 });
+        const orders = response.orders || [];
+        
+        // Check if this book is in any order
+        const purchased = orders.some((order) => {
+          if (order.books && Array.isArray(order.books)) {
+            return order.books.some((b) => b.id === bookId);
+          }
+          return false;
+        });
+        
+        setIsPurchased(purchased);
+      } catch (error) {
+        console.error('Error checking purchase:', error);
+        setIsPurchased(false);
+      } finally {
+        setCheckingPurchase(false);
+      }
+    };
+    checkPurchase();
+  }, [userId, bookId, isMyBook, userRole]);
+
+  // Fetch book from API
+  useEffect(() => {
+    const fetchBook = async () => {
+      if (!bookId) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const response = await apiClient.getBook(bookId);
+        setBook(response.book);
+      } catch (error) {
+        console.error('Error fetching book:', error);
+        // Fallback to dummy data
+        const dummyBook = getBookById(bookId) || getBookById('1');
+        setBook(dummyBook);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchBook();
+  }, [bookId]);
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={themeColors.primary.main} />
+      </View>
+    );
+  }
+
+  if (!book) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 40 }]}>
+        <Text style={{ fontSize: 18, color: themeColors.text.secondary }}>Book not found</Text>
+      </View>
+    );
+  }
+
+  const coverImages = book.cover_images || (book.cover_image_url ? [book.cover_image_url] : [book.cover || 'https://via.placeholder.com/200']);
+  const authorName = book.author?.name || book.author_name || 'Unknown Author';
+
   return (
     <View style={styles.container}>
       <Header title="Book Details" navigation={navigation} />
@@ -456,14 +500,27 @@ const BookDetailScreen = ({ route, navigation }) => {
             </TouchableOpacity>
           </View>
         ) : userRole === 'reader' ? (
-          // Reader viewing other authors' books - Only Read button
+          // Reader viewing other authors' books
           <View style={styles.actionContainer}>
-            <TouchableOpacity
-              style={styles.readButton}
-              onPress={() => navigation.navigate('Reader', { bookId: book.id })}
-            >
-              <Text style={styles.readButtonText}>Read</Text>
-            </TouchableOpacity>
+            {checkingPurchase ? (
+              <ActivityIndicator size="small" color={themeColors.primary.main} />
+            ) : isPurchased || book.is_free ? (
+              // Book is purchased or free - Show Read button
+              <TouchableOpacity
+                style={styles.readButton}
+                onPress={() => navigation.navigate('Reader', { bookId: book.id })}
+              >
+                <Text style={styles.readButtonText}>Read</Text>
+              </TouchableOpacity>
+            ) : (
+              // Book is not purchased - Show Buy Now button
+              <TouchableOpacity
+                style={styles.buyButton}
+                onPress={() => navigation.navigate('Payment', { bookId: book.id })}
+              >
+                <Text style={styles.buyButtonText}>Buy Now</Text>
+              </TouchableOpacity>
+            )}
           </View>
         ) : (
           // Other cases (if any) - Buy and Read

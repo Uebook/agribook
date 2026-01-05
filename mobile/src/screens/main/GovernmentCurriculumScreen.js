@@ -3,7 +3,7 @@
  * Features: State selection, PDF curriculum display with government Yojana banners
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,15 +14,17 @@ import {
   Image,
   Modal,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import Header from '../../components/common/Header';
 import {
   indianStates,
   governmentCurriculums,
   getCurriculumsByState,
-} from '../../services/dummyData';
+} from '../../services/dummyData'; // Still importing for fallback
 import { useSettings } from '../../context/SettingsContext';
 import { useAuth } from '../../context/AuthContext';
+import apiClient from '../../services/api';
 
 const GovernmentCurriculumScreen = ({ navigation }) => {
   const { getThemeColors, getFontSizeMultiplier } = useSettings();
@@ -31,12 +33,40 @@ const GovernmentCurriculumScreen = ({ navigation }) => {
   const fontSizeMultiplier = getFontSizeMultiplier();
   const [selectedState, setSelectedState] = useState(null);
   const [showStateModal, setShowStateModal] = useState(false);
+  const [curriculums, setCurriculums] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const curriculums = useMemo(() => {
-    if (selectedState) {
-      return getCurriculumsByState(selectedState);
-    }
-    return governmentCurriculums;
+  // Fetch curriculums from API
+  useEffect(() => {
+    const fetchCurriculums = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const params = {
+          status: 'active',
+          limit: 100,
+        };
+        if (selectedState) {
+          params.state = selectedState;
+        }
+        const response = await apiClient.getCurriculums(params);
+        setCurriculums(response.curriculums || []);
+      } catch (err) {
+        console.error('Error fetching curriculums:', err);
+        setError('Failed to load curriculum data.');
+        // Fallback to dummy data
+        if (selectedState) {
+          setCurriculums(getCurriculumsByState(selectedState));
+        } else {
+          setCurriculums(governmentCurriculums);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCurriculums();
   }, [selectedState]);
 
   const handleStateSelect = (stateId) => {
@@ -44,52 +74,80 @@ const GovernmentCurriculumScreen = ({ navigation }) => {
     setShowStateModal(false);
   };
 
-  const handleViewPDF = (curriculum) => {
+  const handleViewPDF = useCallback((curriculum) => {
+    const pdfUrl = curriculum.pdf_url || curriculum.pdfUrl;
+    if (!pdfUrl) {
+      Alert.alert('Error', 'PDF not available for this curriculum.');
+      return;
+    }
     // In real app, open PDF viewer or download PDF
     Alert.alert(
       'Open PDF',
       `Would you like to view or download "${curriculum.title}"?`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'View', onPress: () => console.log('View PDF:', curriculum.pdfUrl) },
-        { text: 'Download', onPress: () => console.log('Download PDF:', curriculum.pdfUrl) },
+        { text: 'View', onPress: () => {
+          // Navigate to PDF viewer or open URL
+          console.log('View PDF:', pdfUrl);
+          // TODO: Implement PDF viewer navigation
+        }},
+        { text: 'Download', onPress: () => {
+          console.log('Download PDF:', pdfUrl);
+          // TODO: Implement PDF download
+        }},
       ]
     );
-  };
+  }, []);
 
-  const renderCurriculumItem = ({ item }) => (
-    <TouchableOpacity
-      style={styles.curriculumCard}
-      onPress={() => handleViewPDF(item)}
-    >
-      <Image
-        source={{ uri: item.banner }}
-        style={styles.bannerImage}
-        resizeMode="cover"
-      />
-      <View style={styles.curriculumContent}>
-        <Text style={styles.curriculumTitle}>{item.title}</Text>
-        <View style={styles.curriculumMeta}>
-          <Text style={styles.stateBadge}>{item.stateName}</Text>
-          <Text style={styles.languageBadge}>{item.language}</Text>
+  const renderCurriculumItem = useCallback(({ item }) => {
+    const bannerUrl = item.banner_url || item.banner;
+    const stateName = item.state_name || item.stateName || item.state;
+    const publishedDate = item.published_date || item.publishedDate;
+    
+    return (
+      <TouchableOpacity
+        style={styles.curriculumCard}
+        onPress={() => handleViewPDF(item)}
+      >
+        {bannerUrl && (
+          <Image
+            source={{ uri: bannerUrl }}
+            style={styles.bannerImage}
+            resizeMode="cover"
+          />
+        )}
+        <View style={styles.curriculumContent}>
+          <Text style={styles.curriculumTitle}>{item.title}</Text>
+          <View style={styles.curriculumMeta}>
+            {stateName && (
+              <Text style={styles.stateBadge}>{stateName}</Text>
+            )}
+            {item.language && (
+              <Text style={styles.languageBadge}>{item.language}</Text>
+            )}
+          </View>
+          {item.description && (
+            <Text style={styles.curriculumDescription} numberOfLines={2}>
+              {item.description}
+            </Text>
+          )}
+          <View style={styles.curriculumFooter}>
+            {publishedDate && (
+              <Text style={styles.publishedDate}>
+                Published: {new Date(publishedDate).toLocaleDateString()}
+              </Text>
+            )}
+            <TouchableOpacity
+              style={styles.viewButton}
+              onPress={() => handleViewPDF(item)}
+            >
+              <Text style={styles.viewButtonText}>View PDF 📄</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-        <Text style={styles.curriculumDescription} numberOfLines={2}>
-          {item.description}
-        </Text>
-        <View style={styles.curriculumFooter}>
-          <Text style={styles.publishedDate}>
-            Published: {new Date(item.publishedDate).toLocaleDateString()}
-          </Text>
-          <TouchableOpacity
-            style={styles.viewButton}
-            onPress={() => handleViewPDF(item)}
-          >
-            <Text style={styles.viewButtonText}>View PDF 📄</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  }, [handleViewPDF, styles]);
 
   const renderStateItem = ({ item }) => (
     <TouchableOpacity
@@ -350,7 +408,18 @@ const GovernmentCurriculumScreen = ({ navigation }) => {
             </TouchableOpacity>
           </View>
 
-          {curriculums.length === 0 ? (
+          {loading ? (
+            <View style={styles.emptyContainer}>
+              <ActivityIndicator size="large" color={themeColors.primary.main} />
+              <Text style={[styles.emptySubtext, { marginTop: 10 }]}>Loading curriculum...</Text>
+            </View>
+          ) : error ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyIcon}>⚠️</Text>
+              <Text style={styles.emptyText}>Error</Text>
+              <Text style={styles.emptySubtext}>{error}</Text>
+            </View>
+          ) : curriculums.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyIcon}>📄</Text>
               <Text style={styles.emptyText}>No curriculum found</Text>

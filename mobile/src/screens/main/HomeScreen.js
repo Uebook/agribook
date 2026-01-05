@@ -116,7 +116,59 @@ const HomeScreen = ({ navigation }) => {
     return [];
   }, [isAuthor, userId, allAudioBooks]);
 
-  const continueReading = isAuthor ? [] : continueReadingBooks;
+  // Fetch continue reading books (purchased books with reading progress)
+  const [continueReading, setContinueReading] = useState([]);
+  
+  useEffect(() => {
+    const fetchContinueReading = async () => {
+      if (isAuthor || !userId) {
+        setContinueReading([]);
+        return;
+      }
+      
+      try {
+        // Fetch user's purchased books
+        const ordersResponse = await apiClient.getOrders(userId, { limit: 50 });
+        const orders = ordersResponse.orders || [];
+        
+        // Extract books from orders and format for continue reading
+        const continueBooks = [];
+        const bookIds = new Set();
+        
+        orders.forEach((order) => {
+          if (order.books && order.books.length > 0) {
+            order.books.forEach((book) => {
+              if (!bookIds.has(book.id)) {
+                bookIds.add(book.id);
+                continueBooks.push({
+                  id: book.id,
+                  title: book.title,
+                  cover: book.cover || book.cover_image_url || 'https://via.placeholder.com/200',
+                  cover_image_url: book.cover || book.cover_image_url || 'https://via.placeholder.com/200',
+                  author: {
+                    name: book.author?.name || 'Unknown Author',
+                  },
+                  author_name: book.author?.name || 'Unknown Author',
+                  readingProgress: 0, // TODO: Fetch actual reading progress from API
+                  lastRead: order.date ? new Date(order.date).toLocaleDateString() : 'Recently',
+                });
+              }
+            });
+          }
+        });
+        
+        // Sort by most recent purchase and limit to 5
+        setContinueReading(continueBooks.slice(0, 5));
+      } catch (error) {
+        console.error('Error fetching continue reading:', error);
+        // Fallback to empty array or dummy data
+        setContinueReading([]);
+      }
+    };
+    
+    fetchContinueReading();
+  }, [userId, isAuthor]);
+  
   const trending = isAuthor ? [] : (allBooks.slice(0, 10) || trendingBooks);
   const recommendations = isAuthor ? [] : (allBooks.slice(0, 10) || recommendedBooks);
   const audioPodcasts = isAuthor ? [] : allAudioBooks;
@@ -147,6 +199,370 @@ const HomeScreen = ({ navigation }) => {
   const getUnreadNotificationCount = () => {
     return notifications.filter((notif) => !notif.isRead).length;
   };
+
+  // Define styles BEFORE render functions to prevent "styles is undefined" error
+  // Use useMemo to prevent recreation on every render
+  const styles = useMemo(() => StyleSheet.create({
+    headerTop: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      marginBottom: 16,
+    },
+    greetingContainer: {
+      flex: 1,
+    },
+    userNameContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    ratingContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      marginLeft: 8,
+    },
+    ratingStar: {
+      fontSize: 14 * fontSizeMultiplier,
+    },
+    ratingText: {
+      fontSize: 12 * fontSizeMultiplier,
+      color: themeColors.text.secondary,
+      fontWeight: '600',
+    },
+    notificationButton: {
+      position: 'relative',
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: themeColors.background.secondary,
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: themeColors.border?.light || '#E0E0E0',
+    },
+    notificationIcon: {
+      fontSize: 20,
+    },
+    notificationBadge: {
+      position: 'absolute',
+      top: -2,
+      right: -2,
+      backgroundColor: themeColors.error || '#F44336',
+      borderRadius: 10,
+      minWidth: 20,
+      height: 20,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: 4,
+      borderWidth: 2,
+      borderColor: themeColors.background.primary,
+    },
+    notificationBadgeText: {
+      color: themeColors.text.light,
+      fontSize: 10,
+      fontWeight: 'bold',
+    },
+    searchBar: {
+      backgroundColor: themeColors.background.secondary,
+      borderRadius: 8,
+      padding: 12,
+      borderWidth: 1,
+      borderColor: themeColors.border?.light || '#E0E0E0',
+    },
+    searchPlaceholder: {
+      color: themeColors.input.placeholder,
+      fontSize: 16 * fontSizeMultiplier,
+    },
+    section: {
+      marginBottom: 24,
+      paddingHorizontal: 20,
+    },
+    sectionHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 12,
+    },
+    sectionTitle: {
+      fontSize: 20 * fontSizeMultiplier,
+      fontWeight: 'bold',
+      color: themeColors.text.primary,
+    },
+    seeAll: {
+      fontSize: 14 * fontSizeMultiplier,
+      color: themeColors.primary.main,
+      fontWeight: '500',
+    },
+    continueCard: {
+      width: 150,
+      marginRight: 12,
+    },
+    bookCard: {
+      width: 120,
+      marginRight: 12,
+    },
+    bookCover: {
+      width: '100%',
+      height: 180,
+      backgroundColor: themeColors.background.secondary,
+      borderRadius: 8,
+      marginBottom: 8,
+    },
+    continueBookCover: {
+      width: '100%',
+      height: 200,
+      backgroundColor: themeColors.background.secondary,
+      borderRadius: 8,
+      marginBottom: 8,
+    },
+    continueTitle: {
+      fontSize: 12 * fontSizeMultiplier,
+      fontWeight: '600',
+      color: themeColors.text.primary,
+      marginBottom: 8,
+    },
+    progressBar: {
+      height: 4,
+      backgroundColor: themeColors.background.secondary,
+      borderRadius: 2,
+      marginBottom: 4,
+    },
+    progressFill: {
+      height: '100%',
+      backgroundColor: themeColors.primary.main,
+      borderRadius: 2,
+    },
+    progressText: {
+      fontSize: 10 * fontSizeMultiplier,
+      color: themeColors.text.tertiary,
+    },
+    categoriesGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
+    },
+    categoryCard: {
+      width: '48%',
+      backgroundColor: themeColors.background.tertiary,
+      borderRadius: 8,
+      padding: 16,
+      marginBottom: 12,
+      alignItems: 'center',
+    },
+    categoryIcon: {
+      fontSize: 32,
+      marginBottom: 8,
+    },
+    categoryText: {
+      fontSize: 16 * fontSizeMultiplier,
+      fontWeight: '500',
+      color: themeColors.primary.main,
+    },
+    youtubeCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: themeColors.card?.background || themeColors.background.secondary,
+      borderRadius: 12,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: themeColors.card?.border || themeColors.border?.light || '#E0E0E0',
+    },
+    youtubeIcon: {
+      fontSize: 32,
+      marginRight: 12,
+    },
+    youtubeContent: {
+      flex: 1,
+    },
+    youtubeTitle: {
+      fontSize: 16 * fontSizeMultiplier,
+      fontWeight: '600',
+      color: themeColors.text.primary,
+      marginBottom: 4,
+    },
+    youtubeSubtitle: {
+      fontSize: 12 * fontSizeMultiplier,
+      color: themeColors.text.secondary,
+    },
+    youtubeArrow: {
+      fontSize: 24,
+      color: themeColors.text.secondary,
+      marginLeft: 8,
+    },
+    authorSection: {
+      paddingHorizontal: 20,
+      marginTop: 8,
+      marginBottom: 8,
+    },
+    uploadQuickButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: themeColors.primary.main,
+      borderRadius: 12,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: themeColors.primary.main,
+    },
+    uploadQuickIcon: {
+      fontSize: 32,
+      marginRight: 12,
+    },
+    uploadQuickContent: {
+      flex: 1,
+    },
+    uploadQuickTitle: {
+      fontSize: 16 * fontSizeMultiplier,
+      fontWeight: '600',
+      color: themeColors.text.light,
+      marginBottom: 4,
+    },
+    uploadQuickSubtitle: {
+      fontSize: 12 * fontSizeMultiplier,
+      color: themeColors.text.light,
+      opacity: 0.9,
+    },
+    uploadQuickArrow: {
+      fontSize: 24,
+      color: themeColors.text.light,
+      marginLeft: 8,
+    },
+    podcastCard: {
+      flexDirection: 'row',
+      width: 300,
+      backgroundColor: themeColors.card?.background || themeColors.background.secondary,
+      borderRadius: 12,
+      padding: 12,
+      marginRight: 12,
+      borderWidth: 1,
+      borderColor: themeColors.card?.border || themeColors.border?.light || '#E0E0E0',
+    },
+    podcastCover: {
+      width: 80,
+      height: 80,
+      borderRadius: 8,
+      backgroundColor: themeColors.background.tertiary,
+    },
+    podcastInfo: {
+      flex: 1,
+      marginLeft: 12,
+    },
+    podcastTitle: {
+      fontSize: 14 * fontSizeMultiplier,
+      fontWeight: '600',
+      color: themeColors.text.primary,
+      marginBottom: 4,
+    },
+    podcastAuthor: {
+      fontSize: 12 * fontSizeMultiplier,
+      color: themeColors.text.secondary,
+      marginBottom: 8,
+    },
+    podcastMeta: {
+      flexDirection: 'row',
+      gap: 8,
+      marginBottom: 8,
+    },
+    podcastDuration: {
+      fontSize: 11 * fontSizeMultiplier,
+      color: themeColors.text.secondary,
+    },
+    podcastLanguage: {
+      fontSize: 11 * fontSizeMultiplier,
+      color: themeColors.text.secondary,
+    },
+    freeBadge: {
+      alignSelf: 'flex-start',
+      backgroundColor: themeColors.success || '#4CAF50',
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 12,
+    },
+    freeBadgeText: {
+      color: themeColors.text.light,
+      fontSize: 10 * fontSizeMultiplier,
+      fontWeight: '600',
+    },
+    curriculumCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: themeColors.card?.background || themeColors.background.secondary,
+      borderRadius: 12,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: themeColors.card?.border || themeColors.border?.light || '#E0E0E0',
+    },
+    curriculumIcon: {
+      fontSize: 32,
+      marginRight: 12,
+    },
+    curriculumContent: {
+      flex: 1,
+    },
+    curriculumTitle: {
+      fontSize: 16 * fontSizeMultiplier,
+      fontWeight: '600',
+      color: themeColors.text.primary,
+      marginBottom: 4,
+    },
+    curriculumSubtitle: {
+      fontSize: 12 * fontSizeMultiplier,
+      color: themeColors.text.secondary,
+    },
+    curriculumArrow: {
+      fontSize: 24,
+      color: themeColors.text.secondary,
+      marginLeft: 8,
+    },
+    editButton: {
+      marginTop: 8,
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      backgroundColor: themeColors.primary.main,
+      borderRadius: 6,
+      alignSelf: 'flex-start',
+    },
+    editButtonText: {
+      color: themeColors.text.light,
+      fontSize: 12 * fontSizeMultiplier,
+      fontWeight: '600',
+    },
+    editButtonSmall: {
+      marginTop: 4,
+      paddingVertical: 4,
+      paddingHorizontal: 8,
+      backgroundColor: themeColors.primary.main,
+      borderRadius: 4,
+      alignSelf: 'flex-start',
+    },
+    editButtonTextSmall: {
+      color: themeColors.text.light,
+      fontSize: 10 * fontSizeMultiplier,
+      fontWeight: '600',
+    },
+    emptyStateContainer: {
+      alignItems: 'center',
+      padding: 40,
+      backgroundColor: themeColors.background.secondary,
+      borderRadius: 12,
+    },
+    emptyStateIcon: {
+      fontSize: 64,
+      marginBottom: 16,
+    },
+    emptyStateTitle: {
+      fontSize: 18 * fontSizeMultiplier,
+      fontWeight: '600',
+      color: themeColors.text.primary,
+      marginBottom: 8,
+    },
+    emptyStateText: {
+      fontSize: 14 * fontSizeMultiplier,
+      color: themeColors.text.secondary,
+      textAlign: 'center',
+    },
+  }), [themeColors, fontSizeMultiplier]);
 
   const renderBookItem = ({ item }) => {
     const coverUrl = item.cover_image_url || item.cover || 'https://via.placeholder.com/200';
@@ -399,28 +815,32 @@ const HomeScreen = ({ navigation }) => {
             </TouchableOpacity>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {continueReading.map((book) => (
-              <TouchableOpacity
-                key={book.id}
-                style={styles.continueCard}
-                onPress={() => navigation.navigate('Reader', { bookId: book.id })}
-              >
-                <Image
-                  source={{ uri: book.cover }}
-                  style={styles.continueBookCover}
-                  resizeMode="cover"
-                />
-                <Text style={styles.continueTitle} numberOfLines={1}>
-                  {book.title}
-                </Text>
-                <View style={styles.progressBar}>
-                  <View
-                    style={[styles.progressFill, { width: `${book.readingProgress}%` }]}
+            {continueReading.map((book) => {
+              const coverUrl = book.cover || book.cover_image_url || 'https://via.placeholder.com/200';
+              const progress = book.readingProgress || 0;
+              return (
+                <TouchableOpacity
+                  key={book.id}
+                  style={styles.continueCard}
+                  onPress={() => navigation.navigate('Reader', { bookId: book.id })}
+                >
+                  <Image
+                    source={{ uri: coverUrl }}
+                    style={styles.continueBookCover}
+                    resizeMode="cover"
                   />
-                </View>
-                <Text style={styles.progressText}>{book.readingProgress}%</Text>
-              </TouchableOpacity>
-            ))}
+                  <Text style={styles.continueTitle} numberOfLines={1}>
+                    {book.title}
+                  </Text>
+                  <View style={styles.progressBar}>
+                    <View
+                      style={[styles.progressFill, { width: `${progress}%` }]}
+                    />
+                  </View>
+                  <Text style={styles.progressText}>{progress}%</Text>
+                </TouchableOpacity>
+              );
+            })}
           </ScrollView>
         </View>
       )}
@@ -577,377 +997,6 @@ const HomeScreen = ({ navigation }) => {
     </ScrollView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background.primary,
-  },
-  header: {
-    padding: 20,
-    backgroundColor: Colors.background.primary,
-  },
-  headerTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
-  },
-  greetingContainer: {
-    flex: 1,
-  },
-  greeting: {
-    fontSize: 20,
-    color: Colors.text.secondary,
-    marginBottom: 4,
-  },
-  userName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: Colors.text.primary,
-  },
-  notificationButton: {
-    position: 'relative',
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.background.secondary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.border?.light || '#E0E0E0',
-  },
-  notificationIcon: {
-    fontSize: 20,
-  },
-  notificationBadge: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    backgroundColor: Colors.error || '#F44336',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-    borderWidth: 2,
-    borderColor: Colors.background.primary,
-  },
-  notificationBadgeText: {
-    color: Colors.text.light,
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  searchBar: {
-    backgroundColor: Colors.background.secondary,
-    borderRadius: 8,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: Colors.border.light,
-  },
-  searchPlaceholder: {
-    color: Colors.input.placeholder,
-    fontSize: 16,
-  },
-  section: {
-    marginBottom: 24,
-    paddingHorizontal: 20,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: Colors.text.primary,
-  },
-  seeAll: {
-    fontSize: 14,
-    color: Colors.primary.main,
-    fontWeight: '500',
-  },
-  continueCard: {
-    width: 150,
-    marginRight: 12,
-  },
-  bookCard: {
-    width: 120,
-    marginRight: 12,
-  },
-  bookCover: {
-    width: '100%',
-    height: 180,
-    backgroundColor: Colors.background.secondary,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  continueBookCover: {
-    width: '100%',
-    height: 200,
-    backgroundColor: Colors.background.secondary,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  bookTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.text.primary,
-    marginBottom: 4,
-  },
-  bookAuthor: {
-    fontSize: 12,
-    color: Colors.text.secondary,
-  },
-  continueTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.text.primary,
-    marginBottom: 8,
-  },
-  progressBar: {
-    height: 4,
-    backgroundColor: Colors.background.secondary,
-    borderRadius: 2,
-    marginBottom: 4,
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: Colors.primary.main,
-    borderRadius: 2,
-  },
-  progressText: {
-    fontSize: 10,
-    color: Colors.text.tertiary,
-  },
-  categoriesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  categoryCard: {
-    width: '48%',
-    backgroundColor: Colors.background.tertiary,
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 12,
-    alignItems: 'center',
-  },
-  categoryIcon: {
-    fontSize: 32,
-    marginBottom: 8,
-  },
-  categoryText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: Colors.primary.main,
-  },
-  youtubeCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.card?.background || Colors.background.secondary,
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: Colors.card?.border || Colors.border?.light || '#E0E0E0',
-  },
-  youtubeIcon: {
-    fontSize: 32,
-    marginRight: 12,
-  },
-  youtubeContent: {
-    flex: 1,
-  },
-  youtubeTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.text.primary,
-    marginBottom: 4,
-  },
-  youtubeSubtitle: {
-    fontSize: 12,
-    color: Colors.text.secondary,
-  },
-  youtubeArrow: {
-    fontSize: 24,
-    color: Colors.text.secondary,
-    marginLeft: 8,
-  },
-  authorSection: {
-    paddingHorizontal: 20,
-    marginTop: 8,
-    marginBottom: 8,
-  },
-  uploadQuickButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.primary.main,
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: Colors.primary.main,
-  },
-  uploadQuickIcon: {
-    fontSize: 32,
-    marginRight: 12,
-  },
-  uploadQuickContent: {
-    flex: 1,
-  },
-  uploadQuickTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.text.light,
-    marginBottom: 4,
-  },
-  uploadQuickSubtitle: {
-    fontSize: 12,
-    color: Colors.text.light,
-    opacity: 0.9,
-  },
-  uploadQuickArrow: {
-    fontSize: 24,
-    color: Colors.text.light,
-    marginLeft: 8,
-  },
-  podcastCard: {
-    flexDirection: 'row',
-    width: 300,
-    backgroundColor: Colors.card?.background || Colors.background.secondary,
-    borderRadius: 12,
-    padding: 12,
-    marginRight: 12,
-    borderWidth: 1,
-    borderColor: Colors.card?.border || Colors.border?.light || '#E0E0E0',
-  },
-  podcastCover: {
-    width: 80,
-    height: 80,
-    borderRadius: 8,
-    backgroundColor: Colors.background.tertiary,
-  },
-  podcastInfo: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  podcastTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.text.primary,
-    marginBottom: 4,
-  },
-  podcastAuthor: {
-    fontSize: 12,
-    color: Colors.text.secondary,
-    marginBottom: 8,
-  },
-  podcastMeta: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 8,
-  },
-  podcastDuration: {
-    fontSize: 11,
-    color: Colors.text.secondary,
-  },
-  podcastLanguage: {
-    fontSize: 11,
-    color: Colors.text.secondary,
-  },
-  freeBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: Colors.success || '#4CAF50',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  freeBadgeText: {
-    color: Colors.text.light,
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  curriculumCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.card?.background || Colors.background.secondary,
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: Colors.card?.border || Colors.border?.light || '#E0E0E0',
-  },
-  curriculumIcon: {
-    fontSize: 32,
-    marginRight: 12,
-  },
-  curriculumContent: {
-    flex: 1,
-  },
-  curriculumTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.text.primary,
-    marginBottom: 4,
-  },
-  curriculumSubtitle: {
-    fontSize: 12,
-    color: Colors.text.secondary,
-  },
-  curriculumArrow: {
-    fontSize: 24,
-    color: Colors.text.secondary,
-    marginLeft: 8,
-  },
-  editButton: {
-    marginTop: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    backgroundColor: Colors.primary.main,
-    borderRadius: 6,
-    alignSelf: 'flex-start',
-  },
-  editButtonText: {
-    color: Colors.text.light,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  editButtonSmall: {
-    marginTop: 4,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    backgroundColor: Colors.primary.main,
-    borderRadius: 4,
-    alignSelf: 'flex-start',
-  },
-  editButtonTextSmall: {
-    color: Colors.text.light,
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  emptyStateContainer: {
-    alignItems: 'center',
-    padding: 40,
-    backgroundColor: Colors.background.secondary,
-    borderRadius: 12,
-  },
-  emptyStateIcon: {
-    fontSize: 64,
-    marginBottom: 16,
-  },
-  emptyStateTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: Colors.text.primary,
-    marginBottom: 8,
-  },
-  emptyStateText: {
-    fontSize: 14,
-    color: Colors.text.secondary,
-    textAlign: 'center',
-  },
-});
 
 export default HomeScreen;
 

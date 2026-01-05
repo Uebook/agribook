@@ -3,7 +3,7 @@
  * Features: Edit profile, Orders, Wishlist, Settings, Delete account
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,8 +12,9 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  Image,
 } from 'react-native';
-import { userProfile, orders } from '../../services/dummyData';
+import { userProfile } from '../../services/dummyData';
 import { useAuth } from '../../context/AuthContext';
 import { useSettings } from '../../context/SettingsContext';
 import apiClient from '../../services/api';
@@ -26,8 +27,9 @@ const ProfileScreen = ({ navigation }) => {
   const isAuthor = userRole === 'author';
   const [user, setUser] = useState(userData || userProfile);
   const [loading, setLoading] = useState(false);
+  const [orderCount, setOrderCount] = useState(0);
 
-  // Fetch user data from API if userId exists
+  // Fetch user data and order count from API
   useEffect(() => {
     const fetchUserData = async () => {
       if (userId && !userData) {
@@ -46,11 +48,24 @@ const ProfileScreen = ({ navigation }) => {
         setUser(userData);
       }
     };
+
+    const fetchOrderCount = async () => {
+      if (userId) {
+        try {
+          const response = await apiClient.getOrders(userId, { limit: 1 });
+          setOrderCount(response.pagination?.total || 0);
+        } catch (error) {
+          console.error('Error fetching order count:', error);
+          setOrderCount(0);
+        }
+      }
+    };
     
     fetchUserData();
+    fetchOrderCount();
   }, [userId, userData]);
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     Alert.alert(
       'Logout',
       'Are you sure you want to logout?',
@@ -74,61 +89,113 @@ const ProfileScreen = ({ navigation }) => {
         },
       ]
     );
-  };
+  }, [logout]);
 
-  const menuItems = [
-    {
-      id: 'upload',
-      title: 'Upload Book',
-      icon: '📤',
-      onPress: () => navigation.navigate('BookUpload'),
-    },
-    {
+  const handleDeleteAccount = useCallback(() => {
+    Alert.alert(
+      'Delete Account',
+      'Are you sure you want to delete your account? This action cannot be undone and all your data will be permanently deleted.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              // Call API to delete user account
+              await apiClient.deleteUser(userId);
+              // Logout after successful deletion
+              await logout();
+              Alert.alert('Success', 'Your account has been deleted successfully.');
+            } catch (error) {
+              console.error('Delete account error:', error);
+              Alert.alert('Error', error.message || 'Failed to delete account. Please try again.');
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  }, [userId, logout]);
+
+  // Stable navigation callbacks
+  const navigateToBookUpload = useCallback(() => navigation.navigate('BookUpload'), [navigation]);
+  const navigateToOrderHistory = useCallback(() => navigation.navigate('OrderHistory'), [navigation]);
+  const navigateToWishlist = useCallback(() => navigation.navigate('Wishlist'), [navigation]);
+  const navigateToReviews = useCallback(() => navigation.navigate('Reviews'), [navigation]);
+  const navigateToYouTubeChannels = useCallback(() => navigation.navigate('YouTubeChannels'), [navigation]);
+  const navigateToSettings = useCallback(() => navigation.navigate('Settings'), [navigation]);
+  const navigateToEditProfile = useCallback(() => navigation.navigate('EditProfile'), [navigation]);
+
+  // Memoize menuItems to prevent re-creation on every render
+  // Filter menu items based on user role
+  const menuItems = useMemo(() => {
+    const items = [];
+    
+    // Authors can upload books
+    if (isAuthor) {
+      items.push({
+        id: 'upload',
+        title: 'Upload Book',
+        icon: '📤',
+        onPress: navigateToBookUpload,
+      });
+    }
+    
+    // Both roles can see orders
+    items.push({
       id: 'orders',
-      title: `My Orders (${orders.length})`,
+      title: `My Orders (${orderCount})`,
       icon: '📦',
-      onPress: () => navigation.navigate('OrderHistory'),
-    },
-    {
-      id: 'wishlist',
-      title: 'Wishlist',
-      icon: '❤️',
-      onPress: () => navigation.navigate('Wishlist'),
-    },
-    {
-      id: 'reviews',
-      title: 'Reviews & Ratings',
-      icon: '⭐',
-      onPress: () => navigation.navigate('Reviews'),
-    },
-    {
+      onPress: navigateToOrderHistory,
+    });
+    
+    // Only readers can use wishlist
+    if (!isAuthor) {
+      items.push({
+        id: 'wishlist',
+        title: 'Wishlist',
+        icon: '❤️',
+        onPress: navigateToWishlist,
+      });
+    }
+    
+    // Only readers can see reviews & ratings
+    if (!isAuthor) {
+      items.push({
+        id: 'reviews',
+        title: 'Reviews & Ratings',
+        icon: '⭐',
+        onPress: navigateToReviews,
+      });
+    }
+    
+    // Both roles can see YouTube channels
+    items.push({
       id: 'youtube',
       title: 'YouTube Channels',
       icon: '📺',
-      onPress: () => navigation.navigate('YouTubeChannels'),
-    },
-    {
+      onPress: navigateToYouTubeChannels,
+    });
+    
+    // Both roles can access settings
+    items.push({
       id: 'settings',
       title: 'Settings',
       icon: '⚙️',
-      onPress: () => navigation.navigate('Settings'),
-    },
-    // TODO: Add privacy and notification settings later
-    // {
-    //   id: 'privacy',
-    //   title: 'Privacy Settings',
-    //   icon: '🔒',
-    //   onPress: () => navigation.navigate('PrivacySettings'),
-    // },
-    // {
-    //   id: 'notifications',
-    //   title: 'Notification Settings',
-    //   icon: '🔔',
-    //   onPress: () => navigation.navigate('NotificationSettings'),
-    // },
-  ];
+      onPress: navigateToSettings,
+    });
+    
+    return items;
+  }, [isAuthor, orderCount, navigateToBookUpload, navigateToOrderHistory, navigateToWishlist, navigateToReviews, navigateToYouTubeChannels, navigateToSettings]);
 
-  const styles = StyleSheet.create({
+  // Memoize styles to prevent re-creation on every render
+  const styles = useMemo(() => StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: themeColors.background.primary,
@@ -148,6 +215,11 @@ const ProfileScreen = ({ navigation }) => {
       justifyContent: 'center',
       alignItems: 'center',
       marginBottom: 12,
+      overflow: 'hidden',
+    },
+    avatarImage: {
+      width: '100%',
+      height: '100%',
     },
     avatarText: {
       fontSize: 32 * fontSizeMultiplier,
@@ -213,6 +285,9 @@ const ProfileScreen = ({ navigation }) => {
       alignItems: 'center',
       marginBottom: 12,
     },
+    dangerButtonDisabled: {
+      opacity: 0.6,
+    },
     dangerButtonText: {
       color: themeColors.text.light,
       fontSize: 16 * fontSizeMultiplier,
@@ -226,14 +301,18 @@ const ProfileScreen = ({ navigation }) => {
       borderWidth: 1,
       borderColor: themeColors.border?.light || '#E0E0E0',
     },
+    logoutButtonDisabled: {
+      opacity: 0.6,
+    },
     logoutButtonText: {
       color: themeColors.text.primary,
       fontSize: 16 * fontSizeMultiplier,
       fontWeight: '600',
     },
-  });
+  }), [themeColors, fontSizeMultiplier]);
 
-  const getInitials = (name) => {
+  // Memoize getInitials function
+  const getInitials = useCallback((name) => {
     if (!name) return 'U';
     return name
       .split(' ')
@@ -241,7 +320,7 @@ const ProfileScreen = ({ navigation }) => {
       .join('')
       .toUpperCase()
       .slice(0, 2);
-  };
+  }, []);
 
   if (loading) {
     return (
@@ -253,19 +332,27 @@ const ProfileScreen = ({ navigation }) => {
 
   return (
     <ScrollView style={styles.container}>
-      {/* Profile Header */}
-      <View style={styles.profileHeader}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{getInitials(user?.name || 'User')}</Text>
-        </View>
-        <Text style={styles.userName}>{user?.name || 'User'}</Text>
-        <Text style={styles.userEmail}>{user?.email || user?.mobile || 'No email'}</Text>
+            {/* Profile Header */}
+            <View style={styles.profileHeader}>
+              <View style={styles.avatar}>
+                {user?.avatar_url ? (
+                  <Image
+                    source={{ uri: user.avatar_url }}
+                    style={styles.avatarImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <Text style={styles.avatarText}>{getInitials(user?.name || 'User')}</Text>
+                )}
+              </View>
+              <Text style={styles.userName}>{user?.name || 'User'}</Text>
+              <Text style={styles.userEmail}>{user?.email || user?.mobile || 'No email'}</Text>
         {user?.mobile && (
           <Text style={[styles.userEmail, { marginTop: 4 }]}>+91 {user.mobile}</Text>
         )}
         <TouchableOpacity
           style={styles.editButton}
-          onPress={() => navigation.navigate('EditProfile')}
+          onPress={navigateToEditProfile}
         >
           <Text style={styles.editButtonText}>Edit Profile</Text>
         </TouchableOpacity>
@@ -288,10 +375,18 @@ const ProfileScreen = ({ navigation }) => {
 
       {/* Account Actions */}
       <View style={styles.accountSection}>
-        <TouchableOpacity style={styles.dangerButton}>
+        <TouchableOpacity 
+          style={[styles.dangerButton, loading && styles.dangerButtonDisabled]} 
+          onPress={handleDeleteAccount}
+          disabled={loading}
+        >
           <Text style={styles.dangerButtonText}>Delete Account</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+        <TouchableOpacity 
+          style={[styles.logoutButton, loading && styles.logoutButtonDisabled]} 
+          onPress={handleLogout}
+          disabled={loading}
+        >
           <Text style={styles.logoutButtonText}>Logout</Text>
         </TouchableOpacity>
       </View>

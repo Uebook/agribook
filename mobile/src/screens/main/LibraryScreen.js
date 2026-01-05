@@ -42,10 +42,46 @@ const LibraryScreen = ({ navigation }) => {
             limit: 100,
           });
           setMyBooks(response.books || []);
+        } else if (userId) {
+          // For readers, fetch purchased books from orders API
+          const ordersResponse = await apiClient.getOrders(userId, { limit: 100 });
+          const orders = ordersResponse.orders || [];
+          
+          // Extract unique books from orders
+          const purchasedBooks = [];
+          const bookIds = new Set();
+          
+          orders.forEach((order) => {
+            if (order.books && order.books.length > 0) {
+              order.books.forEach((book) => {
+                if (!bookIds.has(book.id)) {
+                  bookIds.add(book.id);
+                  // Add reading progress and other metadata
+                  purchasedBooks.push({
+                    id: book.id,
+                    title: book.title,
+                    cover_image_url: book.cover || book.cover_image_url || 'https://via.placeholder.com/200',
+                    cover: book.cover || book.cover_image_url || 'https://via.placeholder.com/200',
+                    author: {
+                      name: book.author?.name || 'Unknown Author',
+                    },
+                    author_name: book.author?.name || 'Unknown Author',
+                    author_id: book.author?.id,
+                    readingProgress: 0, // TODO: Fetch from reading_progress table if exists
+                    lastRead: order.date ? new Date(order.date).toLocaleDateString() : 'Recently',
+                    isDownloaded: false, // TODO: Track downloaded status
+                    purchasedAt: order.date,
+                    price: book.price,
+                    isFree: book.isFree || false,
+                  });
+                }
+              });
+            }
+          });
+          
+          setMyBooks(purchasedBooks);
         } else {
-          // For readers, fetch purchased books (TODO: implement purchases API)
-          // For now, use dummy data
-          setMyBooks(myLibraryBooks);
+          setMyBooks([]);
         }
       } catch (error) {
         console.error('Error fetching library:', error);
@@ -75,7 +111,7 @@ const LibraryScreen = ({ navigation }) => {
   const renderBookItem = ({ item }) => {
     const isMyBook = userRole === 'author' && userId && item.author_id === userId;
     const coverUrl = item.cover_image_url || item.cover || 'https://via.placeholder.com/200';
-    const authorName = item.author?.name || item.author_name || 'Unknown Author';
+    const authorName = item.author?.name || item.author_name || item.author?.name || 'Unknown Author';
     
     return (
       <TouchableOpacity
@@ -108,7 +144,7 @@ const LibraryScreen = ({ navigation }) => {
             </View>
           )}
           <View style={styles.bookMeta}>
-            {!isMyBook && <Text style={styles.lastRead}>{item.lastRead}</Text>}
+            {!isMyBook && item.lastRead && <Text style={styles.lastRead}>{item.lastRead}</Text>}
             {item.isDownloaded && !isMyBook && (
               <View style={styles.downloadedBadge}>
                 <Text style={styles.downloadedText}>📥 Downloaded</Text>

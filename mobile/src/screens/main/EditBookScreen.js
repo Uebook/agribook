@@ -3,7 +3,7 @@
  * For authors to edit their uploaded books and audio books
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import {
   View,
   Text,
@@ -127,12 +127,21 @@ const EditBookScreen = ({ route, navigation }) => {
     fetchBookData();
   }, [bookId, audioId, isAudio, userId]);
 
-  const handleInputChange = (field, value) => {
-    setFormData({
-      ...formData,
+  const handleInputChange = useCallback((field, value) => {
+    setFormData((prev) => ({
+      ...prev,
       [field]: value,
-    });
-  };
+    }));
+  }, []);
+
+  // Create stable callback functions for each input field
+  const handleTitleChange = useCallback((value) => handleInputChange('title', value), [handleInputChange]);
+  const handleDescriptionChange = useCallback((value) => handleInputChange('description', value), [handleInputChange]);
+  const handlePriceChange = useCallback((value) => handleInputChange('price', value), [handleInputChange]);
+  const handlePagesChange = useCallback((value) => handleInputChange('pages', value), [handleInputChange]);
+  const handleIsbnChange = useCallback((value) => handleInputChange('isbn', value), [handleInputChange]);
+  const handleCategoryChange = useCallback((value) => handleInputChange('category', value), [handleInputChange]);
+  const handleLanguageChange = useCallback((value) => handleInputChange('language', value), [handleInputChange]);
 
   const handleImagePicker = () => {
     Alert.alert(
@@ -283,24 +292,8 @@ const EditBookScreen = ({ route, navigation }) => {
     }
   };
 
-  const InputField = ({ label, value, onChangeText, placeholder, keyboardType = 'default', multiline = false, editable = true }) => (
-    <View style={styles.inputGroup}>
-      <Text style={styles.label}>{label}</Text>
-      <TextInput
-        style={[styles.input, multiline && styles.textArea, !editable && styles.inputDisabled]}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={themeColors.input.placeholder}
-        keyboardType={keyboardType}
-        multiline={multiline}
-        numberOfLines={multiline ? 4 : 1}
-        editable={editable}
-      />
-    </View>
-  );
-
-  const styles = StyleSheet.create({
+  // Memoize styles FIRST to prevent re-creation on every render
+  const styles = useMemo(() => StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: themeColors.background.primary,
@@ -512,7 +505,38 @@ const EditBookScreen = ({ route, navigation }) => {
       textAlign: 'center',
       lineHeight: 18 * fontSizeMultiplier,
     },
-  });
+  }), [themeColors, fontSizeMultiplier]);
+
+  // Memoize placeholder color separately
+  const placeholderColor = useMemo(() => themeColors.input.placeholder, [themeColors.input.placeholder]);
+
+  // Memoize InputField component AFTER styles is defined
+  const InputField = useMemo(() => {
+    return memo(({ label, value, onChangeText, placeholder, keyboardType = 'default', multiline = false, editable = true }) => {
+      const inputStyles = useMemo(() => [
+        styles.input,
+        multiline && styles.textArea,
+        !editable && styles.inputDisabled
+      ], [multiline, editable, styles.input, styles.textArea, styles.inputDisabled]);
+      
+      return (
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>{label}</Text>
+          <TextInput
+            style={inputStyles}
+            value={value}
+            onChangeText={onChangeText}
+            placeholder={placeholder}
+            placeholderTextColor={placeholderColor}
+            keyboardType={keyboardType}
+            multiline={multiline}
+            numberOfLines={multiline ? 4 : 1}
+            editable={editable}
+          />
+        </View>
+      );
+    });
+  }, [styles, placeholderColor]);
 
   if (loading) {
     return (
@@ -532,14 +556,14 @@ const EditBookScreen = ({ route, navigation }) => {
           <InputField
             label="Book Title *"
             value={formData.title}
-            onChangeText={(value) => handleInputChange('title', value)}
+            onChangeText={handleTitleChange}
             placeholder="Enter book title"
           />
 
           <InputField
             label="Description *"
             value={formData.description}
-            onChangeText={(value) => handleInputChange('description', value)}
+            onChangeText={handleDescriptionChange}
             placeholder="Enter book description"
             multiline={true}
           />
@@ -558,7 +582,7 @@ const EditBookScreen = ({ route, navigation }) => {
                     styles.categoryChip,
                     formData.category === cat.id && styles.categoryChipActive,
                   ]}
-                  onPress={() => handleInputChange('category', cat.id)}
+                  onPress={() => handleCategoryChange(cat.id)}
                 >
                   <Text style={styles.categoryChipIcon}>{cat.icon}</Text>
                   <Text
@@ -579,7 +603,7 @@ const EditBookScreen = ({ route, navigation }) => {
               <InputField
                 label="Price (₹) *"
                 value={formData.price}
-                onChangeText={(value) => handleInputChange('price', value)}
+                onChangeText={handlePriceChange}
                 placeholder="0"
                 keyboardType="numeric"
                 editable={!isAudio}
@@ -593,7 +617,7 @@ const EditBookScreen = ({ route, navigation }) => {
                 <InputField
                   label="Pages"
                   value={formData.pages}
-                  onChangeText={(value) => handleInputChange('pages', value)}
+                  onChangeText={handlePagesChange}
                   placeholder="0"
                   keyboardType="numeric"
                 />
@@ -611,7 +635,7 @@ const EditBookScreen = ({ route, navigation }) => {
                       styles.languageButton,
                       formData.language === 'English' && styles.languageButtonActive,
                     ]}
-                    onPress={() => handleInputChange('language', 'English')}
+                    onPress={() => handleLanguageChange('English')}
                   >
                     <Text
                       style={[
@@ -627,7 +651,7 @@ const EditBookScreen = ({ route, navigation }) => {
                       styles.languageButton,
                       formData.language === 'Hindi' && styles.languageButtonActive,
                     ]}
-                    onPress={() => handleInputChange('language', 'Hindi')}
+                    onPress={() => handleLanguageChange('Hindi')}
                   >
                     <Text
                       style={[
@@ -646,7 +670,7 @@ const EditBookScreen = ({ route, navigation }) => {
                 <InputField
                   label="ISBN"
                   value={formData.isbn}
-                  onChangeText={(value) => handleInputChange('isbn', value)}
+                  onChangeText={handleIsbnChange}
                   placeholder="978-1234567890"
                 />
               </View>
