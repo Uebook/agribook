@@ -118,6 +118,17 @@ export async function POST(request: NextRequest) {
       published_date,
     } = body;
     
+    // Log image data for debugging
+    console.log('📸 Image data received:', {
+      cover_image_url: cover_image_url ? `${cover_image_url.substring(0, 50)}...` : null,
+      cover_images_count: Array.isArray(cover_images) ? cover_images.length : (cover_images ? 1 : 0),
+      cover_images_type: typeof cover_images,
+      cover_images_is_array: Array.isArray(cover_images),
+      cover_images_preview: Array.isArray(cover_images) 
+        ? cover_images.map((url: string) => url ? `${url.substring(0, 30)}...` : null).slice(0, 3)
+        : cover_images ? `${String(cover_images).substring(0, 30)}...` : null,
+    });
+    
     // Validate required fields
     if (!title || !author_id || !category_id) {
       return NextResponse.json(
@@ -205,6 +216,27 @@ export async function POST(request: NextRequest) {
     
     console.log('Category validated:', category.name);
     
+    // Process cover_images - ensure it's an array
+    let processedCoverImages: string[] = [];
+    if (cover_images) {
+      if (Array.isArray(cover_images)) {
+        // Filter out null/undefined/empty strings
+        processedCoverImages = cover_images.filter((url: any) => url && typeof url === 'string' && url.trim().length > 0);
+      } else if (typeof cover_images === 'string' && cover_images.trim().length > 0) {
+        // Single string, convert to array
+        processedCoverImages = [cover_images];
+      }
+    }
+    
+    // Use first cover image as cover_image_url if not provided
+    const finalCoverImageUrl = cover_image_url || (processedCoverImages.length > 0 ? processedCoverImages[0] : null);
+    
+    console.log('📸 Processed image data:', {
+      cover_image_url: finalCoverImageUrl ? `${finalCoverImageUrl.substring(0, 50)}...` : null,
+      cover_images_count: processedCoverImages.length,
+      cover_images_preview: processedCoverImages.slice(0, 3).map((url: string) => url ? `${url.substring(0, 30)}...` : null),
+    });
+    
     // Insert book
     const { data: book, error } = await supabase
       .from('books')
@@ -220,8 +252,8 @@ export async function POST(request: NextRequest) {
         isbn,
         is_free: is_free || false,
         pdf_url,
-        cover_image_url,
-        cover_images: Array.isArray(cover_images) ? cover_images : (cover_images ? [cover_images] : []),
+        cover_image_url: finalCoverImageUrl,
+        cover_images: processedCoverImages,
         published_date: published_date || new Date().toISOString(),
         status: 'pending',
       })
@@ -244,6 +276,15 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
+    
+    // Log successful creation with image info
+    console.log('✅ Book created successfully:', {
+      book_id: book?.id,
+      title: book?.title,
+      has_cover_image_url: !!book?.cover_image_url,
+      cover_images_count: Array.isArray(book?.cover_images) ? book.cover_images.length : 0,
+      cover_image_url_preview: book?.cover_image_url ? `${book.cover_image_url.substring(0, 50)}...` : null,
+    });
     
     // Update author's books count (ignore errors if RPC doesn't exist)
     try {
