@@ -240,8 +240,25 @@ class ApiClient {
       }
 
       const result = await response.json();
-      console.log('Upload success:', result);
-      return result;
+      console.log('Upload success response:', JSON.stringify(result, null, 2));
+      
+      // Ensure we have the expected structure
+      if (!result) {
+        throw new Error('Upload response is empty');
+      }
+      
+      // The API returns { success: true, url: ..., path: ... }
+      // But check all possible formats
+      if (result.url) {
+        return result;
+      } else if (result.data && result.data.url) {
+        return { ...result, url: result.data.url };
+      } else if (result.publicUrl) {
+        return { ...result, url: result.publicUrl };
+      } else {
+        console.error('Unexpected upload response structure:', result);
+        throw new Error('Upload response missing URL field. Response: ' + JSON.stringify(result));
+      }
     } catch (error) {
       console.error('Upload error:', error);
       console.error('Upload error details:', {

@@ -458,10 +458,16 @@ const BookUploadScreen = ({ navigation }) => {
             setUploadProgress(Math.round((currentStep / totalSteps) * 100));
           } catch (uploadError) {
             console.error('PDF upload failed:', uploadError);
+            console.error('PDF upload error details:', {
+              message: uploadError.message,
+              stack: uploadError.stack,
+              name: uploadError.name,
+            });
             // Show error but allow continuing without PDF for testing
+            const errorMessage = uploadError.message || 'Unknown error';
             Alert.alert(
               'Upload Warning',
-              `PDF upload failed: ${uploadError.message || 'Unknown error'}\n\nContinuing without PDF file...`,
+              `PDF upload failed: ${errorMessage}\n\nContinuing without PDF file...`,
               [{ text: 'OK' }]
             );
           }
