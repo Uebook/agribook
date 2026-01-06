@@ -45,20 +45,53 @@ async function handleFileUpload(formData: FormData) {
     const fileType = (formData.get('fileType') as string) || 'application/octet-stream';
     const authorId = formData.get('author_id') as string | null; // Get author_id from formData
     
-    // Debug logging
-    console.log('Upload request received:', {
+    // Enhanced debug logging
+    console.log('📥 Upload request received:', {
       hasFile: !!file,
       fileTypeOf: typeof file,
       fileConstructor: file?.constructor?.name,
+      fileIsNull: file === null,
+      fileIsUndefined: file === undefined,
       bucket,
       folder,
       fileName,
       mimeType: fileType,
+      authorId,
     });
+    
+    // Log file object structure in detail
+    if (file) {
+      const fileAny = file as any;
+      console.log('📄 File object details:', {
+        type: typeof fileAny,
+        constructor: fileAny?.constructor?.name,
+        prototype: Object.getPrototypeOf(fileAny)?.constructor?.name,
+        isFile: fileAny instanceof File,
+        isBlob: fileAny instanceof Blob,
+        keys: Object.keys(fileAny),
+        hasArrayBuffer: typeof fileAny?.arrayBuffer === 'function',
+        hasStream: typeof fileAny?.stream === 'function',
+        hasText: typeof fileAny?.text === 'function',
+        size: fileAny?.size,
+        name: fileAny?.name,
+        type: fileAny?.type,
+        // Check for React Native specific properties
+        uri: fileAny?.uri,
+        path: fileAny?.path,
+      });
+    }
     
     if (!file || !bucket) {
       return NextResponse.json(
-        { error: 'Missing file or bucket', details: { hasFile: !!file, bucket } },
+        { 
+          error: 'Missing file or bucket', 
+          details: { 
+            hasFile: !!file, 
+            bucket,
+            fileType: typeof file,
+            fileConstructor: file?.constructor?.name,
+          } 
+        },
         { status: 400 }
       );
     }
@@ -144,7 +177,15 @@ async function handleFileUpload(formData: FormData) {
         contentType = fileType;
         console.log('✅ File read successfully:', { size: fileBuffer.length, finalFileName, contentType });
       }
-      // Method 6: Try converting to Blob
+      // Method 6: Try as Uint8Array or Array-like
+      else if (fileObj instanceof Uint8Array || Array.isArray(fileObj)) {
+        console.log('Reading as Uint8Array or Array');
+        fileBuffer = Buffer.from(fileObj);
+        finalFileName = fileName;
+        contentType = fileType;
+        console.log('✅ File read successfully:', { size: fileBuffer.length, finalFileName, contentType });
+      }
+      // Method 7: Try converting to Blob
       else {
         console.log('Trying Blob conversion...');
         try {
@@ -158,29 +199,59 @@ async function handleFileUpload(formData: FormData) {
           contentType = fileType;
           console.log('✅ File read via Blob conversion:', { size: fileBuffer.length, finalFileName, contentType });
         } catch (blobError: any) {
-          console.error('❌ All file reading methods failed');
-          console.error('Blob conversion error:', blobError);
-          console.error('File object type:', typeof fileObj);
-          console.error('File object constructor:', fileObj?.constructor?.name);
-          console.error('File object keys:', fileObj ? Object.keys(fileObj) : 'null');
+          console.error('❌ Blob conversion failed, trying alternative methods...');
+          console.error('Blob conversion error:', blobError.message);
           
-          // Last resort: Check if it's a string (base64)
-          if (typeof fileObj === 'string') {
-            if (fileObj.startsWith('data:')) {
-              const base64Data = fileObj.split(',')[1];
-              fileBuffer = Buffer.from(base64Data, 'base64');
-              finalFileName = fileName;
-              contentType = fileType;
-              console.log('✅ File read as base64 string:', { size: fileBuffer.length });
-            } else {
-              throw new Error('File is a string but not base64 format');
+          // Try: Check if it has a _data or data property (some FormData implementations)
+          if (fileObj && typeof fileObj === 'object') {
+            const dataProp = (fileObj as any)._data || (fileObj as any).data;
+            if (dataProp) {
+              console.log('Found _data or data property, trying to read...');
+              if (Buffer.isBuffer(dataProp)) {
+                fileBuffer = dataProp;
+                finalFileName = fileName;
+                contentType = fileType;
+                console.log('✅ File read from _data/data property:', { size: fileBuffer.length });
+              } else if (dataProp instanceof Uint8Array) {
+                fileBuffer = Buffer.from(dataProp);
+                finalFileName = fileName;
+                contentType = fileType;
+                console.log('✅ File read from _data/data as Uint8Array:', { size: fileBuffer.length });
+              }
             }
-          } else {
-            throw new Error(
-              `Cannot read file. Type: ${typeof fileObj}, Constructor: ${fileObj?.constructor?.name || 'unknown'}, ` +
-              `Has arrayBuffer: ${typeof fileObj?.arrayBuffer === 'function'}, ` +
-              `Has stream: ${typeof fileObj?.stream === 'function'}`
-            );
+          }
+          
+          // If still no buffer, try last resort methods
+          if (!fileBuffer) {
+            // Last resort: Check if it's a string (base64)
+            if (typeof fileObj === 'string') {
+              if (fileObj.startsWith('data:')) {
+                const base64Data = fileObj.split(',')[1];
+                fileBuffer = Buffer.from(base64Data, 'base64');
+                finalFileName = fileName;
+                contentType = fileType;
+                console.log('✅ File read as base64 string:', { size: fileBuffer.length });
+              } else {
+                throw new Error('File is a string but not base64 format');
+              }
+            } else {
+              // Final error with all details
+              console.error('❌ All file reading methods failed');
+              console.error('File object type:', typeof fileObj);
+              console.error('File object constructor:', fileObj?.constructor?.name);
+              console.error('File object prototype:', Object.getPrototypeOf(fileObj)?.constructor?.name);
+              console.error('File object keys:', fileObj ? Object.keys(fileObj) : 'null');
+              console.error('File object values:', fileObj ? Object.values(fileObj).slice(0, 3) : 'null');
+              
+              throw new Error(
+                `Cannot read file. Type: ${typeof fileObj}, Constructor: ${fileObj?.constructor?.name || 'unknown'}, ` +
+                `Prototype: ${Object.getPrototypeOf(fileObj)?.constructor?.name || 'unknown'}, ` +
+                `Has arrayBuffer: ${typeof fileObj?.arrayBuffer === 'function'}, ` +
+                `Has stream: ${typeof fileObj?.stream === 'function'}, ` +
+                `Has text: ${typeof fileObj?.text === 'function'}, ` +
+                `Keys: ${fileObj ? Object.keys(fileObj).join(', ') : 'none'}`
+              );
+            }
           }
         }
       }
