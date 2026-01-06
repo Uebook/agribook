@@ -188,6 +188,7 @@ async function handleFileUpload(formData: FormData) {
       // Method 7: Try converting to Blob
       else {
         console.log('Trying Blob conversion...');
+        let bufferFound = false;
         try {
           // React Native FormData may send as object with uri/path
           // In Next.js, FormData.get() should return a File or Blob
@@ -197,6 +198,7 @@ async function handleFileUpload(formData: FormData) {
           fileBuffer = Buffer.from(arrayBuffer);
           finalFileName = fileName;
           contentType = fileType;
+          bufferFound = true;
           console.log('✅ File read via Blob conversion:', { size: fileBuffer.length, finalFileName, contentType });
         } catch (blobError: any) {
           console.error('❌ Blob conversion failed, trying alternative methods...');
@@ -211,18 +213,20 @@ async function handleFileUpload(formData: FormData) {
                 fileBuffer = dataProp;
                 finalFileName = fileName;
                 contentType = fileType;
+                bufferFound = true;
                 console.log('✅ File read from _data/data property:', { size: fileBuffer.length });
               } else if (dataProp instanceof Uint8Array) {
                 fileBuffer = Buffer.from(dataProp);
                 finalFileName = fileName;
                 contentType = fileType;
+                bufferFound = true;
                 console.log('✅ File read from _data/data as Uint8Array:', { size: fileBuffer.length });
               }
             }
           }
           
           // If still no buffer, try last resort methods
-          if (!fileBuffer) {
+          if (!bufferFound) {
             // Last resort: Check if it's a string (base64)
             if (typeof fileObj === 'string') {
               if (fileObj.startsWith('data:')) {
@@ -230,6 +234,7 @@ async function handleFileUpload(formData: FormData) {
                 fileBuffer = Buffer.from(base64Data, 'base64');
                 finalFileName = fileName;
                 contentType = fileType;
+                bufferFound = true;
                 console.log('✅ File read as base64 string:', { size: fileBuffer.length });
               } else {
                 throw new Error('File is a string but not base64 format');
