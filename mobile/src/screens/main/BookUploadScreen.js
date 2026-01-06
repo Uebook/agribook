@@ -667,11 +667,26 @@ const BookUploadScreen = ({ navigation }) => {
                       // Handle response structure - API returns { success: true, url: ..., path: ... }
                       console.log(`Cover image ${i + 1} upload result:`, result);
 
-                      if (!result || typeof result !== 'object') {
-                        throw new Error('Upload response is invalid: ' + typeof result);
+                      // Check if result exists and is an object
+                      if (!result) {
+                        throw new Error('Upload response is null or undefined');
                       }
 
-                      const imageUrl = result.url || (result.data && result.data.url) || result.publicUrl;
+                      if (typeof result !== 'object') {
+                        throw new Error('Upload response is not an object: ' + typeof result);
+                      }
+
+                      // Check for error in response
+                      if (result.error) {
+                        throw new Error(result.error || 'Upload failed');
+                      }
+
+                      // Safely access URL property
+                      let imageUrl = null;
+                      if (result && typeof result === 'object') {
+                        imageUrl = result.url || (result.data && result.data && result.data.url) || result.publicUrl || null;
+                      }
+
                       if (imageUrl) {
                         coverImageUrls.push(imageUrl);
                         currentStep++;
@@ -688,8 +703,9 @@ const BookUploadScreen = ({ navigation }) => {
                   })
                   .catch((uploadError) => {
                     console.error(`Cover image ${i + 1} upload failed:`, uploadError);
+                    const errorMessage = uploadError?.message || uploadError?.error || 'Unknown error';
                     console.error(`Cover image ${i + 1} error details:`, {
-                      message: uploadError?.message || 'Unknown error',
+                      message: errorMessage,
                       stack: uploadError?.stack,
                       name: uploadError?.name,
                       error: uploadError,
