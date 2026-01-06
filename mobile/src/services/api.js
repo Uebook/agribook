@@ -227,36 +227,53 @@ class ApiClient {
 
       console.log('Upload response:', { status: response.status, statusText: response.statusText });
 
+      // Get response text first to handle both success and error cases
+      const responseText = await response.text();
+      console.log('Upload response text (raw):', responseText.substring(0, 500)); // Log first 500 chars
+
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Upload failed response:', errorText);
+        console.error('Upload failed - HTTP status:', response.status);
         let error;
         try {
-          error = JSON.parse(errorText);
-        } catch {
-          error = { error: errorText || 'Upload failed' };
+          error = JSON.parse(responseText);
+          console.error('Upload failed - parsed error:', error);
+        } catch (parseError) {
+          console.error('Upload failed - could not parse error:', responseText);
+          error = { error: responseText || 'Upload failed' };
         }
-        throw new Error(error.error || `Upload failed with status ${response.status}`);
+        throw new Error(error.error || error.message || `Upload failed with status ${response.status}`);
       }
 
-      const result = await response.json();
-      console.log('Upload success response:', JSON.stringify(result, null, 2));
+      // Parse successful response
+      let result;
+      try {
+        result = JSON.parse(responseText);
+        console.log('Upload success response (parsed):', JSON.stringify(result, null, 2));
+      } catch (parseError) {
+        console.error('Failed to parse upload response as JSON:', responseText);
+        throw new Error('Invalid JSON response from upload API');
+      }
       
       // Ensure we have the expected structure
-      if (!result) {
-        throw new Error('Upload response is empty');
+      if (!result || typeof result !== 'object') {
+        console.error('Upload response is not an object:', typeof result, result);
+        throw new Error('Upload response is invalid: ' + typeof result);
       }
       
       // The API returns { success: true, url: ..., path: ... }
       // But check all possible formats
       if (result.url) {
+        console.log('✅ Found URL in result.url:', result.url);
         return result;
       } else if (result.data && result.data.url) {
+        console.log('✅ Found URL in result.data.url:', result.data.url);
         return { ...result, url: result.data.url };
       } else if (result.publicUrl) {
+        console.log('✅ Found URL in result.publicUrl:', result.publicUrl);
         return { ...result, url: result.publicUrl };
       } else {
-        console.error('Unexpected upload response structure:', result);
+        console.error('❌ Unexpected upload response structure - no URL found:', result);
+        console.error('Response keys:', Object.keys(result));
         throw new Error('Upload response missing URL field. Response: ' + JSON.stringify(result));
       }
     } catch (error) {
