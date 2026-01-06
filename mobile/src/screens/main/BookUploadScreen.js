@@ -448,13 +448,23 @@ const BookUploadScreen = ({ navigation }) => {
             };
             const pdfResult = await apiClient.uploadFile(fileToUpload, 'books', 'pdfs', userId);
             console.log('PDF upload result:', pdfResult);
-            
+
             if (!pdfResult) {
               throw new Error('Upload response is null or undefined');
             }
-            
+
+            if (typeof pdfResult !== 'object') {
+              throw new Error('Upload response is not an object: ' + typeof pdfResult);
+            }
+
+            // Check for error in response
+            if (pdfResult.error) {
+              throw new Error(pdfResult.error || 'Upload failed');
+            }
+
             // Handle response structure - API returns { success: true, url: ..., path: ... }
-            pdfUrl = pdfResult.url || (pdfResult.data && pdfResult.data.url) || pdfResult.publicUrl || null;
+            // Safely access URL property
+            pdfUrl = pdfResult.url || (pdfResult.data && pdfResult.data && pdfResult.data.url) || pdfResult.publicUrl || null;
             if (!pdfUrl) {
               console.error('PDF upload response missing URL:', pdfResult);
               throw new Error('Upload succeeded but no URL returned in response. Response: ' + JSON.stringify(pdfResult));
@@ -497,12 +507,27 @@ const BookUploadScreen = ({ navigation }) => {
                     try {
                       // Handle response structure - API returns { success: true, url: ..., path: ... }
                       console.log(`Cover image ${i + 1} upload result:`, result);
-                      
-                      if (!result || typeof result !== 'object') {
-                        throw new Error('Upload response is invalid: ' + typeof result);
+
+                      // Check if result exists and is an object
+                      if (!result) {
+                        throw new Error('Upload response is null or undefined');
                       }
-                      
-                      const imageUrl = result.url || (result.data && result.data.url) || result.publicUrl;
+
+                      if (typeof result !== 'object') {
+                        throw new Error('Upload response is not an object: ' + typeof result);
+                      }
+
+                      // Check for error in response
+                      if (result.error) {
+                        throw new Error(result.error || 'Upload failed');
+                      }
+
+                      // Safely access URL property
+                      let imageUrl = null;
+                      if (result && typeof result === 'object') {
+                        imageUrl = result.url || (result.data && result.data && result.data.url) || result.publicUrl || null;
+                      }
+
                       if (imageUrl) {
                         coverImageUrls.push(imageUrl);
                         currentStep++;
@@ -519,8 +544,9 @@ const BookUploadScreen = ({ navigation }) => {
                   })
                   .catch((uploadError) => {
                     console.error(`Cover image ${i + 1} upload failed:`, uploadError);
+                    const errorMessage = uploadError?.message || uploadError?.error || 'Unknown error';
                     console.error(`Cover image ${i + 1} error details:`, {
-                      message: uploadError?.message || 'Unknown error',
+                      message: errorMessage,
                       stack: uploadError?.stack,
                       name: uploadError?.name,
                       error: uploadError,
@@ -602,11 +628,11 @@ const BookUploadScreen = ({ navigation }) => {
             };
             const audioResult = await apiClient.uploadFile(fileToUpload, 'audio-books', 'audio', userId);
             console.log('Audio upload result:', audioResult);
-            
+
             if (!audioResult) {
               throw new Error('Upload response is null or undefined');
             }
-            
+
             // Handle response structure - API returns { success: true, url: ..., path: ... }
             audioUrl = audioResult.url || (audioResult.data && audioResult.data.url) || audioResult.publicUrl || null;
             if (!audioUrl) {
@@ -640,11 +666,11 @@ const BookUploadScreen = ({ navigation }) => {
                     try {
                       // Handle response structure - API returns { success: true, url: ..., path: ... }
                       console.log(`Cover image ${i + 1} upload result:`, result);
-                      
+
                       if (!result || typeof result !== 'object') {
                         throw new Error('Upload response is invalid: ' + typeof result);
                       }
-                      
+
                       const imageUrl = result.url || (result.data && result.data.url) || result.publicUrl;
                       if (imageUrl) {
                         coverImageUrls.push(imageUrl);
