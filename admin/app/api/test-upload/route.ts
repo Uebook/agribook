@@ -43,10 +43,15 @@ export async function POST(request: NextRequest) {
     });
     
     if (!file) {
-      return NextResponse.json(
+      const errorResponse = NextResponse.json(
         { error: 'No file provided. Send file as FormData with key "file"' },
         { status: 400 }
       );
+      // Add CORS headers
+      Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+        errorResponse.headers.set(key, value);
+      });
+      return errorResponse;
     }
     
     // Determine file type and bucket
@@ -89,7 +94,7 @@ export async function POST(request: NextRequest) {
       }
     } catch (readError: any) {
       console.error('❌ Error reading file:', readError);
-      return NextResponse.json(
+      const errorResponse = NextResponse.json(
         { 
           error: 'Failed to read file: ' + readError.message,
           details: {
@@ -99,6 +104,11 @@ export async function POST(request: NextRequest) {
         },
         { status: 400 }
       );
+      // Add CORS headers
+      Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+        errorResponse.headers.set(key, value);
+      });
+      return errorResponse;
     }
     
     // Generate unique filename
@@ -114,10 +124,15 @@ export async function POST(request: NextRequest) {
     
     // Ensure fileBuffer is defined
     if (!fileBuffer) {
-      return NextResponse.json(
+      const errorResponse = NextResponse.json(
         { error: 'File buffer is undefined' },
         { status: 400 }
       );
+      // Add CORS headers
+      Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+        errorResponse.headers.set(key, value);
+      });
+      return errorResponse;
     }
     
     // Upload to Supabase Storage
@@ -131,13 +146,18 @@ export async function POST(request: NextRequest) {
     
     if (uploadError) {
       console.error('❌ Supabase upload error:', uploadError);
-      return NextResponse.json(
+      const errorResponse = NextResponse.json(
         { 
           error: 'Failed to upload to Supabase: ' + uploadError.message,
           details: uploadError
         },
         { status: 500 }
       );
+      // Add CORS headers
+      Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+        errorResponse.headers.set(key, value);
+      });
+      return errorResponse;
     }
     
     console.log('✅ File uploaded to Supabase:', uploadData.path);
@@ -149,7 +169,7 @@ export async function POST(request: NextRequest) {
     
     console.log('✅ Public URL generated:', urlData.publicUrl);
     
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       message: 'File uploaded successfully',
       file: {
@@ -166,15 +186,27 @@ export async function POST(request: NextRequest) {
       publicUrl: urlData.publicUrl, // Alias for compatibility
     }, { status: 200 });
     
+    // Add CORS headers
+    Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+      response.headers.set(key, value);
+    });
+    
+    return response;
+    
   } catch (error: any) {
     console.error('❌ Test upload error:', error);
-    return NextResponse.json(
+    const errorResponse = NextResponse.json(
       { 
         error: 'Internal server error: ' + (error.message || 'Unknown error'),
         details: error.stack
       },
       { status: 500 }
     );
+    // Add CORS headers to error response
+    Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+      errorResponse.headers.set(key, value);
+    });
+    return errorResponse;
   }
 }
 
