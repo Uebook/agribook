@@ -91,10 +91,18 @@ export async function POST(request: NextRequest) {
       size: fileBuffer.length,
     });
     
+    // Ensure fileBuffer is defined
+    if (!fileBuffer) {
+      return NextResponse.json(
+        { error: 'File buffer is undefined' },
+        { status: 400 }
+      );
+    }
+    
     // Upload to Supabase Storage
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from(bucket)
-      .upload(uniqueFileName, fileBuffer, {
+      .upload(uniqueFileName, fileBuffer as Buffer, {
         contentType: fileType,
         cacheControl: '3600',
         upsert: false,
