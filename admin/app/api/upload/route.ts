@@ -63,7 +63,7 @@ async function handleFileUpload(formData: FormData) {
     if (file) {
       const fileAny = file as any;
       console.log('📄 File object details:', {
-        type: typeof fileAny,
+        objectType: typeof fileAny,
         constructor: fileAny?.constructor?.name,
         prototype: Object.getPrototypeOf(fileAny)?.constructor?.name,
         isFile: fileAny instanceof File,
@@ -74,7 +74,7 @@ async function handleFileUpload(formData: FormData) {
         hasText: typeof fileAny?.text === 'function',
         size: fileAny?.size,
         name: fileAny?.name,
-        type: fileAny?.type,
+        mimeType: fileAny?.type,
         // Check for React Native specific properties
         uri: fileAny?.uri,
         path: fileAny?.path,
