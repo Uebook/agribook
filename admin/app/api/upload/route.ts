@@ -1,10 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/client';
 
+// CORS headers helper
+function getCorsHeaders() {
+  return {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Accept, Authorization',
+    'Access-Control-Max-Age': '86400',
+  };
+}
+
+// Handle OPTIONS request for CORS
+export async function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, {
+    status: 200,
+    headers: getCorsHeaders(),
+  });
+}
+
 // POST /api/upload - Handles both file uploads and URL generation
 export async function POST(request: NextRequest) {
   try {
     const contentType = request.headers.get('content-type') || '';
+    
+    console.log('📥 Upload API called:', {
+      contentType,
+      method: request.method,
+      url: request.url,
+      hasContentType: !!contentType,
+    });
     
     // Try to detect if this is a file upload or URL generation request
     // React Native FormData might not include "multipart/form-data" in the header
@@ -14,23 +39,46 @@ export async function POST(request: NextRequest) {
       const formData = await request.formData();
       const file = formData.get('file');
       
+      console.log('📦 FormData parsed:', {
+        hasFile: !!file,
+        fileType: typeof file,
+        formDataKeys: Array.from(formData.keys()),
+      });
+      
       if (file) {
         // This is a file upload request - pass formData directly to avoid reading body twice
-        return handleFileUpload(formData);
+        const result = await handleFileUpload(formData);
+        // Add CORS headers to response
+        const response = NextResponse.json(result);
+        Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+          response.headers.set(key, value);
+        });
+        return response;
       } else {
         // No file found, might be URL generation with formData (unlikely but handle it)
         return handleUrlGeneration(request);
       }
-    } catch (formDataError) {
+    } catch (formDataError: any) {
+      console.error('❌ FormData parsing error:', formDataError);
+      console.error('Error details:', {
+        message: formDataError.message,
+        stack: formDataError.stack,
+        contentType,
+      });
       // If formData parsing fails, try as JSON (URL generation request)
       return handleUrlGeneration(request);
     }
   } catch (error: any) {
     console.error('Error in POST /api/upload:', error);
-    return NextResponse.json(
+    const errorResponse = NextResponse.json(
       { error: 'Internal server error: ' + (error.message || 'Unknown error') },
       { status: 500 }
     );
+    // Add CORS headers to error response
+    Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+      errorResponse.headers.set(key, value);
+    });
+    return errorResponse;
   }
 }
 

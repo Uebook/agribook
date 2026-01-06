@@ -7,6 +7,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/client';
 
+// CORS headers helper
+function getCorsHeaders() {
+  return {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Accept, Authorization',
+    'Access-Control-Max-Age': '86400',
+  };
+}
+
+// Handle OPTIONS request for CORS
+export async function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, {
+    status: 200,
+    headers: getCorsHeaders(),
+  });
+}
+
 export async function POST(request: NextRequest) {
   try {
     console.log('🧪 Test Upload API called');
@@ -162,7 +180,7 @@ export async function POST(request: NextRequest) {
 
 // GET endpoint for testing
 export async function GET(request: NextRequest) {
-  return NextResponse.json({
+  const response = NextResponse.json({
     message: 'Test Upload API',
     usage: {
       method: 'POST',
@@ -180,4 +198,11 @@ export async function GET(request: NextRequest) {
       pdfs: 'books/pdfs',
     },
   });
+  
+  // Add CORS headers
+  Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+    response.headers.set(key, value);
+  });
+  
+  return response;
 }
