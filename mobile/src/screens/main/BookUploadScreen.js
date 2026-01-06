@@ -544,12 +544,24 @@ const BookUploadScreen = ({ navigation }) => {
                   })
                   .catch((uploadError) => {
                     console.error(`Cover image ${i + 1} upload failed:`, uploadError);
-                    const errorMessage = uploadError?.message || uploadError?.error || 'Unknown error';
+                    // Extract error message safely - don't access properties that might not exist
+                    let errorMessage = 'Unknown error';
+                    if (uploadError) {
+                      if (typeof uploadError === 'string') {
+                        errorMessage = uploadError;
+                      } else if (uploadError.message) {
+                        errorMessage = uploadError.message;
+                      } else if (uploadError.error) {
+                        errorMessage = typeof uploadError.error === 'string' ? uploadError.error : 'Upload failed';
+                      }
+                    }
+                    
                     console.error(`Cover image ${i + 1} error details:`, {
                       message: errorMessage,
-                      stack: uploadError?.stack,
-                      name: uploadError?.name,
-                      error: uploadError,
+                      stack: uploadError?.stack || 'No stack trace',
+                      name: uploadError?.name || 'Unknown',
+                      errorType: typeof uploadError,
+                      isNetworkError: errorMessage?.includes('Network') || errorMessage?.includes('fetch'),
                     });
                     // Continue without this image - error already logged
                   })
@@ -703,12 +715,24 @@ const BookUploadScreen = ({ navigation }) => {
                   })
                   .catch((uploadError) => {
                     console.error(`Cover image ${i + 1} upload failed:`, uploadError);
-                    const errorMessage = uploadError?.message || uploadError?.error || 'Unknown error';
+                    // Extract error message safely - don't access properties that might not exist
+                    let errorMessage = 'Unknown error';
+                    if (uploadError) {
+                      if (typeof uploadError === 'string') {
+                        errorMessage = uploadError;
+                      } else if (uploadError.message) {
+                        errorMessage = uploadError.message;
+                      } else if (uploadError.error) {
+                        errorMessage = typeof uploadError.error === 'string' ? uploadError.error : 'Upload failed';
+                      }
+                    }
+                    
                     console.error(`Cover image ${i + 1} error details:`, {
                       message: errorMessage,
-                      stack: uploadError?.stack,
-                      name: uploadError?.name,
-                      error: uploadError,
+                      stack: uploadError?.stack || 'No stack trace',
+                      name: uploadError?.name || 'Unknown',
+                      errorType: typeof uploadError,
+                      isNetworkError: errorMessage?.includes('Network') || errorMessage?.includes('fetch'),
                     });
                     // Continue without this image - error already logged
                   })
