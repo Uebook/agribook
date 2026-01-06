@@ -63,7 +63,9 @@ export async function POST(request: NextRequest) {
       } else {
         // Try to read as stream or other format
         // In Node.js, FormData.get() returns File objects, so this should rarely be needed
-        throw new Error(`Cannot read file: Unsupported file type. Got: ${typeof fileObj}, constructor: ${fileObj?.constructor?.name || 'unknown'}`);
+        const fileType = typeof fileObj;
+        const constructorName = (fileObj && fileObj.constructor) ? (fileObj.constructor as any).name : 'unknown';
+        throw new Error(`Cannot read file: Unsupported file type. Got: ${fileType}, constructor: ${constructorName}`);
       }
     } catch (readError: any) {
       console.error('❌ Error reading file:', readError);
