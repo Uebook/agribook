@@ -448,8 +448,13 @@ const BookUploadScreen = ({ navigation }) => {
             };
             const pdfResult = await apiClient.uploadFile(fileToUpload, 'books', 'pdfs', userId);
             console.log('PDF upload result:', pdfResult);
+            
+            if (!pdfResult) {
+              throw new Error('Upload response is null or undefined');
+            }
+            
             // Handle response structure - API returns { success: true, url: ..., path: ... }
-            pdfUrl = pdfResult?.url || pdfResult?.data?.url || pdfResult?.publicUrl || null;
+            pdfUrl = pdfResult.url || (pdfResult.data && pdfResult.data.url) || pdfResult.publicUrl || null;
             if (!pdfUrl) {
               console.error('PDF upload response missing URL:', pdfResult);
               throw new Error('Upload succeeded but no URL returned in response. Response: ' + JSON.stringify(pdfResult));
@@ -581,8 +586,13 @@ const BookUploadScreen = ({ navigation }) => {
             };
             const audioResult = await apiClient.uploadFile(fileToUpload, 'audio-books', 'audio', userId);
             console.log('Audio upload result:', audioResult);
+            
+            if (!audioResult) {
+              throw new Error('Upload response is null or undefined');
+            }
+            
             // Handle response structure - API returns { success: true, url: ..., path: ... }
-            audioUrl = audioResult?.url || audioResult?.data?.url || audioResult?.publicUrl || null;
+            audioUrl = audioResult.url || (audioResult.data && audioResult.data.url) || audioResult.publicUrl || null;
             if (!audioUrl) {
               console.error('Audio upload response missing URL:', audioResult);
               throw new Error('Upload succeeded but no URL returned in response. Response: ' + JSON.stringify(audioResult));
