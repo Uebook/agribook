@@ -1,19 +1,70 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { dummyBooks, type Book } from '@/lib/dummyData';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
+import apiClient from '@/lib/api/client';
+
+interface Book {
+    id: string;
+    title: string;
+    cover?: string;
+    cover_image_url?: string;
+    cover_images?: string[];
+    author?: {
+        id: string;
+        name: string;
+    };
+    author_id?: string;
+    category?: {
+        id: string;
+        name: string;
+    };
+    category_id?: string;
+    price?: number;
+    is_free?: boolean;
+    views_count?: number;
+    views?: number;
+    status?: string;
+}
 
 export default function BooksPage() {
     const router = useRouter();
-    const [books] = useState<Book[]>(dummyBooks);
+    const [books, setBooks] = useState<Book[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [filter, setFilter] = useState<'all' | 'published' | 'pending' | 'rejected'>('all');
 
-    const filteredBooks = filter === 'all'
-        ? books
-        : books.filter(book => book.status === filter);
+    useEffect(() => {
+        fetchBooks();
+    }, [filter]);
+
+    const fetchBooks = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+            const params: any = {
+                page: 1,
+                limit: 100, // Get more books for admin panel
+            };
+            
+            // Add status filter if not 'all'
+            if (filter !== 'all') {
+                params.status = filter;
+            }
+            
+            const response = await apiClient.getBooks(params);
+            setBooks(response.books || []);
+        } catch (err: any) {
+            console.error('Error fetching books:', err);
+            setError(err.message || 'Failed to fetch books');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const filteredBooks = books; // Already filtered by API
 
     const getStatusBadge = (status: string) => {
         const styles = {
@@ -38,34 +89,71 @@ export default function BooksPage() {
                     <div className="max-w-7xl mx-auto">
                         <div className="flex items-center justify-between mb-6">
                             <h2 className="text-3xl font-bold text-gray-900">Books Management</h2>
-                            <button
-                                onClick={() => router.push('/books/add')}
-                                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                            >
-                                + Add New Book
-                            </button>
+                            <div className="flex space-x-2">
+                                <button
+                                    onClick={fetchBooks}
+                                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                                >
+                                    Refresh
+                                </button>
+                                <button
+                                    onClick={() => router.push('/books/add')}
+                                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                                >
+                                    + Add New Book
+                                </button>
+                            </div>
                         </div>
 
                         {/* Filters */}
                         <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
                             <div className="flex space-x-2">
-                                {(['all', 'published', 'pending', 'rejected'] as const).map((status) => (
-                                    <button
-                                        key={status}
-                                        onClick={() => setFilter(status)}
-                                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${filter === status
-                                                ? 'bg-green-600 text-white'
-                                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                            }`}
-                                    >
-                                        {status.charAt(0).toUpperCase() + status.slice(1)} ({status === 'all' ? books.length : books.filter(b => b.status === status).length})
-                                    </button>
-                                ))}
+                                {(['all', 'published', 'pending', 'rejected'] as const).map((status) => {
+                                    const count = status === 'all' 
+                                        ? books.length 
+                                        : books.filter(b => b.status === status).length;
+                                    return (
+                                        <button
+                                            key={status}
+                                            onClick={() => setFilter(status)}
+                                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${filter === status
+                                                    ? 'bg-green-600 text-white'
+                                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                                }`}
+                                        >
+                                            {status.charAt(0).toUpperCase() + status.slice(1)} ({count})
+                                        </button>
+                                    );
+                                })}
                             </div>
                         </div>
 
-                        {/* Books Table */}
-                        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+                        {loading ? (
+                            <div className="bg-white rounded-lg shadow-sm p-8 text-center">
+                                <p className="text-gray-500">Loading books...</p>
+                            </div>
+                        ) : error ? (
+                            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                                <p className="text-red-800">{error}</p>
+                                <button
+                                    onClick={fetchBooks}
+                                    className="mt-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                                >
+                                    Retry
+                                </button>
+                            </div>
+                        ) : filteredBooks.length === 0 ? (
+                            <div className="bg-white rounded-lg shadow-sm p-8 text-center">
+                                <p className="text-gray-500">No books found.</p>
+                                <button
+                                    onClick={() => router.push('/books/add')}
+                                    className="mt-4 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                                >
+                                    Add First Book
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                             <table className="min-w-full divide-y divide-gray-200">
                                 <thead className="bg-gray-50">
                                     <tr>
@@ -94,30 +182,41 @@ export default function BooksPage() {
                                         <tr key={book.id} className="hover:bg-gray-50">
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="flex items-center">
-                                                    <img
-                                                        className="h-12 w-8 object-cover rounded"
-                                                        src={book.cover}
-                                                        alt={book.title}
-                                                    />
-                                                    <div className="ml-4">
+                                                    {(book.cover_image_url || book.cover || (book.cover_images && book.cover_images[0])) && (
+                                                        <img
+                                                            className="h-12 w-8 object-cover rounded"
+                                                            src={book.cover_image_url || book.cover || (book.cover_images && book.cover_images[0])}
+                                                            alt={book.title}
+                                                            onError={(e) => {
+                                                                (e.target as HTMLImageElement).style.display = 'none';
+                                                            }}
+                                                        />
+                                                    )}
+                                                    <div className={book.cover_image_url || book.cover ? "ml-4" : ""}>
                                                         <div className="text-sm font-medium text-gray-900">{book.title}</div>
-                                                        <div className="text-sm text-gray-500">{book.category.name}</div>
+                                                        <div className="text-sm text-gray-500">
+                                                            {book.category?.name || 'No category'}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm text-gray-900">{book.author.name}</div>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="text-sm text-gray-900">
-                                                    {book.isFree ? 'Free' : `₹${book.price}`}
+                                                    {book.author?.name || 'Unknown Author'}
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm text-gray-900">{book.views.toLocaleString()}</div>
+                                                <div className="text-sm text-gray-900">
+                                                    {book.is_free ? 'Free' : `₹${book.price || 0}`}
+                                                </div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                {getStatusBadge(book.status)}
+                                                <div className="text-sm text-gray-900">
+                                                    {(book.views_count || book.views || 0).toLocaleString()}
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                {getStatusBadge(book.status || 'pending')}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                                 <div className="flex space-x-2">
@@ -146,6 +245,7 @@ export default function BooksPage() {
                                 </tbody>
                             </table>
                         </div>
+                        )}
                     </div>
                 </main>
             </div>

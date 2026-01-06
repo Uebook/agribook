@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     const authorId = searchParams.get('author');
     const language = searchParams.get('language');
     const search = searchParams.get('search');
-    const status = searchParams.get('status') || 'published';
+    const status = searchParams.get('status'); // Don't default to 'published', allow 'all'
     
     // Build query
     let query = supabase
@@ -27,9 +27,13 @@ export async function GET(request: NextRequest) {
         author:authors(*),
         category:categories(*)
       `)
-      .eq('status', status)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
+    
+    // Apply status filter only if specified (not 'all')
+    if (status && status !== 'all') {
+      query = query.eq('status', status);
+    }
     
     // Apply filters
     if (categoryId) {
@@ -63,10 +67,15 @@ export async function GET(request: NextRequest) {
     }
     
     // Get total count for pagination
-    const { count: totalCount } = await supabase
+    let countQuery = supabase
       .from('books')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', status);
+      .select('*', { count: 'exact', head: true });
+    
+    if (status && status !== 'all') {
+      countQuery = countQuery.eq('status', status);
+    }
+    
+    const { count: totalCount } = await countQuery;
     
     return NextResponse.json({
       books: books || [],
