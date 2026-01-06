@@ -55,16 +55,15 @@ export async function POST(request: NextRequest) {
         const arrayBuffer = await fileObj.arrayBuffer();
         fileBuffer = Buffer.from(arrayBuffer);
         console.log('✅ File read as File object, size:', fileBuffer.length);
-      } else if (fileObj instanceof Blob) {
-        const arrayBuffer = await fileObj.arrayBuffer();
+      } else if (fileObj && typeof (fileObj as any).arrayBuffer === 'function') {
+        // Has arrayBuffer method (Blob-like or File-like)
+        const arrayBuffer = await (fileObj as any).arrayBuffer();
         fileBuffer = Buffer.from(arrayBuffer);
-        console.log('✅ File read as Blob, size:', fileBuffer.length);
+        console.log('✅ File read via arrayBuffer method, size:', fileBuffer.length);
       } else {
         // Try to read as stream or other format
-        const blob = new Blob([fileObj as any]);
-        const arrayBuffer = await blob.arrayBuffer();
-        fileBuffer = Buffer.from(arrayBuffer);
-        console.log('✅ File read via Blob conversion, size:', fileBuffer.length);
+        // In Node.js, FormData.get() returns File objects, so this should rarely be needed
+        throw new Error(`Cannot read file: Unsupported file type. Got: ${typeof fileObj}, constructor: ${fileObj?.constructor?.name || 'unknown'}`);
       }
     } catch (readError: any) {
       console.error('❌ Error reading file:', readError);
