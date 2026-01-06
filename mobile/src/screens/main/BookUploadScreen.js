@@ -65,7 +65,7 @@ const BookUploadScreen = ({ navigation }) => {
         console.log('📡 Fetching categories from API...');
         const response = await apiClient.getCategories();
         console.log('📦 Categories API response:', response);
-        
+
         if (response?.categories && response.categories.length > 0) {
           // Map API categories to match expected format
           const mappedCategories = response.categories.map((cat) => ({
@@ -447,10 +447,12 @@ const BookUploadScreen = ({ navigation }) => {
               name: pdfFile.name || 'book.pdf',
             };
             const pdfResult = await apiClient.uploadFile(fileToUpload, 'books', 'pdfs', userId);
+            console.log('PDF upload result:', pdfResult);
             // Handle response structure - API returns { success: true, url: ..., path: ... }
-            pdfUrl = pdfResult?.url || pdfResult?.data?.url || null;
+            pdfUrl = pdfResult?.url || pdfResult?.data?.url || pdfResult?.publicUrl || null;
             if (!pdfUrl) {
-              throw new Error('Upload succeeded but no URL returned in response');
+              console.error('PDF upload response missing URL:', pdfResult);
+              throw new Error('Upload succeeded but no URL returned in response. Response: ' + JSON.stringify(pdfResult));
             }
             currentStep++;
             setUploadProgress(Math.round((currentStep / totalSteps) * 100));
@@ -469,7 +471,7 @@ const BookUploadScreen = ({ navigation }) => {
         if (coverImages.length > 0) {
           setUploadProgress(Math.round((currentStep / totalSteps) * 100));
           const imageUploadPromises = [];
-          
+
           for (let i = 0; i < coverImages.length; i++) {
             if (coverImages[i].file || coverImages[i].uri) {
               const imageFile = coverImages[i].file || {
@@ -477,7 +479,7 @@ const BookUploadScreen = ({ navigation }) => {
                 type: coverImages[i].type || 'image/jpeg',
                 name: coverImages[i].name || `cover_${i}.jpg`,
               };
-              
+
               imageUploadPromises.push(
                 apiClient.uploadFile(imageFile, 'books', 'covers', userId)
                   .then((result) => {
@@ -499,7 +501,7 @@ const BookUploadScreen = ({ navigation }) => {
               );
             }
           }
-          
+
           await Promise.all(imageUploadPromises);
         }
 
@@ -522,7 +524,6 @@ const BookUploadScreen = ({ navigation }) => {
           cover_images: coverImageUrls, // Can be empty array for testing
           published_date: new Date().toISOString(), // Set published date to current date
         };
-
         await apiClient.createBook(bookData);
         currentStep++;
         setUploadProgress(100);
@@ -571,10 +572,12 @@ const BookUploadScreen = ({ navigation }) => {
               name: audioFile.name || 'audio.mp3',
             };
             const audioResult = await apiClient.uploadFile(fileToUpload, 'audio-books', 'audio', userId);
+            console.log('Audio upload result:', audioResult);
             // Handle response structure - API returns { success: true, url: ..., path: ... }
-            audioUrl = audioResult?.url || audioResult?.data?.url || null;
+            audioUrl = audioResult?.url || audioResult?.data?.url || audioResult?.publicUrl || null;
             if (!audioUrl) {
-              throw new Error('Upload succeeded but no URL returned in response');
+              console.error('Audio upload response missing URL:', audioResult);
+              throw new Error('Upload succeeded but no URL returned in response. Response: ' + JSON.stringify(audioResult));
             }
             currentStep++;
             setUploadProgress(Math.round((currentStep / totalSteps) * 100));
@@ -588,7 +591,7 @@ const BookUploadScreen = ({ navigation }) => {
         if (coverImages.length > 0) {
           setUploadProgress(Math.round((currentStep / totalSteps) * 100));
           const imageUploadPromises = [];
-          
+
           for (let i = 0; i < coverImages.length; i++) {
             if (coverImages[i].file || coverImages[i].uri) {
               const imageFile = coverImages[i].file || {
@@ -596,7 +599,7 @@ const BookUploadScreen = ({ navigation }) => {
                 type: coverImages[i].type || 'image/jpeg',
                 name: coverImages[i].name || `cover_${i}.jpg`,
               };
-              
+
               imageUploadPromises.push(
                 apiClient.uploadFile(imageFile, 'audio-books', 'covers', userId)
                   .then((result) => {
@@ -618,7 +621,7 @@ const BookUploadScreen = ({ navigation }) => {
               );
             }
           }
-          
+
           await Promise.all(imageUploadPromises);
         }
 
@@ -636,7 +639,6 @@ const BookUploadScreen = ({ navigation }) => {
           cover_url: coverImageUrls[0] || null, // Can be null for testing
           published_date: new Date().toISOString(), // Set published date to current date
         };
-
         // Create audio book record via API
         const createdAudioBook = await apiClient.createAudioBook(audioBookData);
         console.log('Audio book created successfully:', createdAudioBook);
@@ -723,7 +725,7 @@ const BookUploadScreen = ({ navigation }) => {
   const InputField = useMemo(() => {
     return memo(({ label, value, onChangeText, placeholder, keyboardType = 'default', multiline = false }) => {
       const inputStyles = useMemo(() => [styles.input, multiline && styles.textArea], [multiline]);
-      
+
       return (
         <View style={styles.inputGroup}>
           <Text style={styles.label}>{label}</Text>
@@ -1126,25 +1128,25 @@ const BookUploadScreen = ({ navigation }) => {
                 style={styles.categoryScroll}
               >
                 {categories.map((cat) => (
-                <TouchableOpacity
-                  key={cat.id}
-                  style={[
-                    styles.categoryChip,
-                    formData.category === cat.id && styles.categoryChipActive,
-                  ]}
-                  onPress={() => handleInputChange('category', cat.id)}
-                >
-                  <Text style={styles.categoryChipIcon}>{cat.icon}</Text>
-                  <Text
+                  <TouchableOpacity
+                    key={cat.id}
                     style={[
-                      styles.categoryChipText,
-                      formData.category === cat.id && styles.categoryChipTextActive,
+                      styles.categoryChip,
+                      formData.category === cat.id && styles.categoryChipActive,
                     ]}
+                    onPress={() => handleInputChange('category', cat.id)}
                   >
-                    {cat.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                    <Text style={styles.categoryChipIcon}>{cat.icon}</Text>
+                    <Text
+                      style={[
+                        styles.categoryChipText,
+                        formData.category === cat.id && styles.categoryChipTextActive,
+                      ]}
+                    >
+                      {cat.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
               </ScrollView>
             )}
           </View>
@@ -1353,36 +1355,36 @@ const BookUploadScreen = ({ navigation }) => {
               </View>
             </>
           ) : (
-              <View style={styles.uploadSection}>
-                <Text style={styles.sectionTitle}>Upload Audio File (Podcast)</Text>
-                <Text style={[styles.uploadHint, { marginBottom: 12, color: themeColors.primary.main }]}>
-                  ⚠️ Audio books are free only. All audio content will be available to all readers.
-                </Text>
-                <TouchableOpacity
-                  style={styles.uploadButton}
-                  onPress={handleAudioPicker}
-                >
-                  <Text style={styles.uploadButtonText}>🎙️ Choose Audio File</Text>
-                  <Text style={styles.uploadHint}>MP3, M4A, WAV formats supported</Text>
-                </TouchableOpacity>
-                {audioFile && (
-                  <View style={styles.audioFileInfo}>
-                    <Text style={styles.audioFileName} numberOfLines={1}>
-                      🎙️ {audioFile.name || 'audio.mp3'}
+            <View style={styles.uploadSection}>
+              <Text style={styles.sectionTitle}>Upload Audio File (Podcast)</Text>
+              <Text style={[styles.uploadHint, { marginBottom: 12, color: themeColors.primary.main }]}>
+                ⚠️ Audio books are free only. All audio content will be available to all readers.
+              </Text>
+              <TouchableOpacity
+                style={styles.uploadButton}
+                onPress={handleAudioPicker}
+              >
+                <Text style={styles.uploadButtonText}>🎙️ Choose Audio File</Text>
+                <Text style={styles.uploadHint}>MP3, M4A, WAV formats supported</Text>
+              </TouchableOpacity>
+              {audioFile && (
+                <View style={styles.audioFileInfo}>
+                  <Text style={styles.audioFileName} numberOfLines={1}>
+                    🎙️ {audioFile.name || 'audio.mp3'}
+                  </Text>
+                  {audioFile.size && (
+                    <Text style={styles.audioFileSize}>
+                      {(audioFile.size / (1024 * 1024)).toFixed(2)} MB
                     </Text>
-                    {audioFile.size && (
-                      <Text style={styles.audioFileSize}>
-                        {(audioFile.size / (1024 * 1024)).toFixed(2)} MB
-                      </Text>
-                    )}
-                    <TouchableOpacity
-                      onPress={() => setAudioFile(null)}
-                      style={styles.removeAudioButton}
-                    >
-                      <Text style={styles.removeAudioText}>Remove</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
+                  )}
+                  <TouchableOpacity
+                    onPress={() => setAudioFile(null)}
+                    style={styles.removeAudioButton}
+                  >
+                    <Text style={styles.removeAudioText}>Remove</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
               <View style={styles.uploadSection}>
                 <Text style={styles.sectionTitle}>Cover Image for Podcast</Text>
                 <TouchableOpacity
@@ -1440,8 +1442,8 @@ const BookUploadScreen = ({ navigation }) => {
                 {uploadProgress < 50
                   ? 'Preparing files...'
                   : uploadProgress < 90
-                  ? 'Uploading to server...'
-                  : 'Finalizing...'}
+                    ? 'Uploading to server...'
+                    : 'Finalizing...'}
               </Text>
             </View>
           )}

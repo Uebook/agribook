@@ -125,7 +125,8 @@ export async function POST(request: NextRequest) {
       .eq('id', author_id)
       .single();
     
-    if (!existingAuthor && !authorCheckError) {
+    if (authorCheckError || !existingAuthor) {
+      console.log('Author not found, attempting to create from user data...');
       // Author doesn't exist, try to create from user data
       const { data: userData, error: userError } = await supabase
         .from('users')
@@ -139,10 +140,10 @@ export async function POST(request: NextRequest) {
           .from('authors')
           .insert({
             id: userData.id, // Use same ID as user
-            name: userData.name,
-            email: userData.email,
-            mobile: userData.mobile,
-            avatar_url: userData.avatar_url,
+            name: userData.name || 'Unknown Author',
+            email: userData.email || null,
+            mobile: userData.mobile || null,
+            avatar_url: userData.avatar_url || null,
             status: 'active',
           })
           .select()
@@ -150,26 +151,50 @@ export async function POST(request: NextRequest) {
         
         if (createAuthorError) {
           console.error('Error creating author:', createAuthorError);
-          // Continue anyway - might be a duplicate key error
+          // If it's a duplicate key error, author might have been created by another request
+          // Check again if author exists now
+          const { data: retryAuthor } = await supabase
+            .from('authors')
+            .select('id')
+            .eq('id', author_id)
+            .single();
+          
+          if (!retryAuthor) {
+            return NextResponse.json(
+              { error: `Failed to create author record: ${createAuthorError.message}` },
+              { status: 400 }
+            );
+          }
         } else {
           finalAuthorId = newAuthor.id;
         }
+      } else {
+        return NextResponse.json(
+          { error: `Author ID ${author_id} not found in users table. Please ensure the user exists.` },
+          { status: 400 }
+        );
       }
     }
     
     // Validate category exists
     const { data: category, error: categoryError } = await supabase
       .from('categories')
-      .select('id')
+      .select('id, name')
       .eq('id', category_id)
       .single();
     
     if (!category || categoryError) {
+      console.error('Category validation error:', categoryError);
       return NextResponse.json(
-        { error: 'Invalid category_id: Category does not exist' },
+        { 
+          error: `Invalid category_id: Category with ID ${category_id} does not exist. Please select a valid category.`,
+          details: categoryError?.message || 'Category not found'
+        },
         { status: 400 }
       );
     }
+    
+    console.log('Category validated:', category.name);
     
     // Insert book
     const { data: book, error } = await supabase
