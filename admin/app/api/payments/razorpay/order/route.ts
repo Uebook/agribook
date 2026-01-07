@@ -72,8 +72,8 @@ export async function POST(request: NextRequest) {
 
     // Get Razorpay instance
     const razorpay = getRazorpayInstance();
-    const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || 'rzp_test_S10gAhQQEnKuYr';
-    const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || 'vvNvgwDNluGnA8GkHahHpgtp';
+    const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || 'rzp_test_S10srfDgCfFXIL';
+    const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || 'wKdMJW6om9TdsV2XwWQyzcdh';
 
     // Log credentials status (without exposing secret)
     console.log('🔑 Razorpay config:', {
