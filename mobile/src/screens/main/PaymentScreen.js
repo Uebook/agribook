@@ -13,6 +13,7 @@ import {
   Alert,
 } from 'react-native';
 import RazorpayCheckout from 'react-native-razorpay';
+import { Platform } from 'react-native';
 import Header from '../../components/common/Header';
 import { useSettings } from '../../context/SettingsContext';
 import { useAuth } from '../../context/AuthContext';
@@ -118,13 +119,13 @@ const PaymentScreen = ({ route, navigation }) => {
         throw new Error('Invalid order response: orderId is missing');
       }
 
-      // Step 2: Open Razorpay Checkout
-      const options = {
+      // Step 2: Open Razorpay Checkout - This opens a native Razorpay screen
+      const razorpayOptions = {
         description: `Purchase: ${item.title}`,
-        image: item.cover_image_url || item.cover_url,
+        image: item.cover_image_url || item.cover_url || 'https://i.imgur.com/3l7C2Jn.png',
         currency: 'INR',
         key: orderResponse.key || RAZORPAY_KEY_ID,
-        amount: orderResponse.amount, // Amount in paise
+        amount: orderResponse.amount, // Amount in paise (already in paise from API)
         name: 'Agribook',
         order_id: orderResponse.orderId,
         prefill: {
@@ -132,15 +133,39 @@ const PaymentScreen = ({ route, navigation }) => {
           contact: '', // You can prefill user contact if available
           name: '', // You can prefill user name if available
         },
-        theme: { color: themeColors.primary.main || '#10B981' },
+        theme: { 
+          color: themeColors.primary.main || '#10B981',
+        },
+        notes: {
+          bookId: bookId || '',
+          audioBookId: audioBookId || '',
+          userId: userId || '',
+        },
+        // Modal options for better UX
+        modal: {
+          ondismiss: () => {
+            console.log('Razorpay checkout dismissed by user');
+            setProcessing(false);
+          },
+        },
       };
 
-      console.log('💳 Opening Razorpay checkout with options:', options);
+      console.log('💳 Opening Razorpay native checkout screen with options:', {
+        ...razorpayOptions,
+        key: razorpayOptions.key.substring(0, 15) + '...', // Don't log full key
+      });
 
-      RazorpayCheckout.open(options)
+      // Open Razorpay Checkout - This will open a native full-screen payment UI
+      RazorpayCheckout.open(razorpayOptions)
         .then(async (data) => {
-          // Payment success
-          console.log('✅ Payment success:', data);
+          // Payment success - Razorpay SDK returns payment data
+          console.log('✅ Payment success data:', {
+            razorpay_payment_id: data.razorpay_payment_id,
+            razorpay_order_id: data.razorpay_order_id,
+            razorpay_signature: data.razorpay_signature ? 'present' : 'missing',
+          });
+          
+          setProcessing(true); // Keep loading while verifying
           
           try {
             // Verify payment with backend
@@ -154,18 +179,30 @@ const PaymentScreen = ({ route, navigation }) => {
               itemPrice
             );
 
+            console.log('✅ Payment verification response:', verifyResponse);
+
             if (verifyResponse.success) {
-              Alert.alert('Success', 'Payment successful! Book added to your library.', [
-                { text: 'OK', onPress: () => navigation.goBack() },
-              ]);
+              Alert.alert(
+                'Payment Successful! 🎉',
+                'Your payment was successful and the book has been added to your library.',
+                [
+                  { 
+                    text: 'OK', 
+                    onPress: () => {
+                      // Navigate back and refresh if needed
+                      navigation.goBack();
+                    }
+                  },
+                ]
+              );
             } else {
               throw new Error('Payment verification failed');
             }
           } catch (verifyError) {
-            console.error('Payment verification error:', verifyError);
+            console.error('❌ Payment verification error:', verifyError);
             Alert.alert(
-              'Error',
-              'Payment was successful but verification failed. Please contact support.',
+              'Verification Error',
+              'Your payment was successful, but we encountered an issue verifying it. Please contact support with your payment ID: ' + (data.razorpay_payment_id || 'N/A'),
               [{ text: 'OK' }]
             );
           } finally {
@@ -174,16 +211,39 @@ const PaymentScreen = ({ route, navigation }) => {
         })
         .catch((error) => {
           // Payment failed or user cancelled
-          console.error('❌ Payment error:', error);
+          console.error('❌ Razorpay checkout error:', {
+            code: error.code,
+            description: error.description,
+            message: error.message,
+            error: error,
+          });
+          
           setProcessing(false);
           
+          // Handle different error types
           if (error.code === 'NETWORK_ERROR') {
-            Alert.alert('Error', 'Network error. Please check your internet connection.');
-          } else if (error.description === 'Payment cancelled') {
-            // User cancelled - don't show error
+            Alert.alert(
+              'Network Error',
+              'Please check your internet connection and try again.',
+              [{ text: 'OK' }]
+            );
+          } else if (error.code === 'BAD_REQUEST_ERROR') {
+            Alert.alert(
+              'Payment Error',
+              error.description || 'Invalid payment request. Please try again.',
+              [{ text: 'OK' }]
+            );
+          } else if (error.description === 'Payment cancelled' || error.code === 'PAYMENT_CANCELLED') {
+            // User cancelled - don't show error, just log
             console.log('Payment cancelled by user');
+            // Optionally show a message
+            // Alert.alert('Payment Cancelled', 'You cancelled the payment.', [{ text: 'OK' }]);
           } else {
-            Alert.alert('Payment Failed', error.description || 'Payment could not be completed. Please try again.');
+            Alert.alert(
+              'Payment Failed',
+              error.description || error.message || 'Payment could not be completed. Please try again.',
+              [{ text: 'OK' }]
+            );
           }
         });
     } catch (error) {
@@ -194,9 +254,9 @@ const PaymentScreen = ({ route, navigation }) => {
         details: error.details,
         stack: error.stack,
       });
-      
+
       let errorMessage = error.message || 'Failed to initiate payment';
-      
+
       // Provide more helpful error messages
       if (error.message?.includes('Network')) {
         errorMessage = 'Network error. Please check your internet connection and try again.';
@@ -205,7 +265,7 @@ const PaymentScreen = ({ route, navigation }) => {
       } else if (error.status === 500) {
         errorMessage = 'Server error. Please try again later or contact support.';
       }
-      
+
       Alert.alert('Payment Error', errorMessage, [{ text: 'OK' }]);
       setProcessing(false);
     }
