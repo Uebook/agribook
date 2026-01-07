@@ -188,9 +188,10 @@ const PaymentScreen = ({ route, navigation }) => {
       }
 
       console.log('✅ RazorpayCheckout is available, opening checkout...');
+      console.log('📱 Platform:', Platform.OS);
 
       // Open Razorpay Checkout - This will open a native full-screen payment UI
-      // Note: This must be called on the main thread
+      // Wrap in try-catch to catch any immediate errors
       RazorpayCheckout.open(razorpayOptions)
         .then(async (data) => {
           // Payment success - Razorpay SDK returns payment data
@@ -280,27 +281,7 @@ const PaymentScreen = ({ route, navigation }) => {
               [{ text: 'OK' }]
             );
           }
-        })
-        .catch((openError) => {
-          // Catch errors from the open() call itself
-          console.error('❌ RazorpayCheckout.open() error:', openError);
-          setProcessing(false);
-          Alert.alert(
-            'SDK Error',
-            `Failed to open Razorpay checkout: ${openError.message || 'Unknown error'}\n\nPlease rebuild the app if this persists.`,
-            [{ text: 'OK' }]
-          );
         });
-      } catch (openError) {
-        // Catch synchronous errors
-        console.error('❌ Error calling RazorpayCheckout.open():', openError);
-        setProcessing(false);
-        Alert.alert(
-          'SDK Error',
-          `Failed to initialize Razorpay: ${openError.message || 'Unknown error'}`,
-          [{ text: 'OK' }]
-        );
-      }
     } catch (error) {
       console.error('❌ Payment initiation error:', error);
       console.error('Error details:', {
