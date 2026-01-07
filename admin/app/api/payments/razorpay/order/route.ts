@@ -81,6 +81,14 @@ export async function POST(request: NextRequest) {
       },
     };
 
+    // Log credentials status (without exposing secret)
+    console.log('🔑 Razorpay config:', {
+      keyId: RAZORPAY_KEY_ID,
+      keyIdSet: !!process.env.RAZORPAY_KEY_ID,
+      secretSet: !!process.env.RAZORPAY_KEY_SECRET,
+      secretLength: RAZORPAY_KEY_SECRET?.length || 0,
+    });
+
     let order;
     try {
       order = await razorpay.orders.create(options);
@@ -93,7 +101,13 @@ export async function POST(request: NextRequest) {
         audioBookId,
       });
     } catch (razorpayError: any) {
-      console.error('❌ Razorpay API error:', razorpayError);
+      console.error('❌ Razorpay API error:', {
+        statusCode: razorpayError.statusCode,
+        error: razorpayError.error,
+        description: razorpayError.description,
+        message: razorpayError.message,
+        fullError: JSON.stringify(razorpayError, null, 2),
+      });
       
       // Check if secret key is placeholder
       if (RAZORPAY_KEY_SECRET === 'YOUR_RAZORPAY_TEST_SECRET_KEY' || !RAZORPAY_KEY_SECRET) {
@@ -102,8 +116,9 @@ export async function POST(request: NextRequest) {
       
       // Check if it's an authentication error
       if (razorpayError.statusCode === 401 || razorpayError.error?.code === 'BAD_REQUEST_ERROR' || razorpayError.statusCode === 400) {
-        const errorMsg = razorpayError.error?.description || razorpayError.description || 'Invalid Razorpay credentials';
-        throw new Error(`Razorpay authentication failed: ${errorMsg}. Please verify RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in environment variables.`);
+        const errorMsg = razorpayError.error?.description || razorpayError.description || razorpayError.error?.field || 'Invalid Razorpay credentials';
+        const errorCode = razorpayError.error?.code || 'AUTH_ERROR';
+        throw new Error(`Razorpay authentication failed (${errorCode}): ${errorMsg}. Please verify that RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET match and are correct in Vercel environment variables.`);
       }
       
       // Check for other common errors
@@ -111,7 +126,9 @@ export async function POST(request: NextRequest) {
         throw new Error(`Invalid Razorpay request: ${razorpayError.error?.description || 'Please check your request parameters'}`);
       }
       
-      throw razorpayError;
+      // Generic error
+      const errorMsg = razorpayError.error?.description || razorpayError.description || razorpayError.message || 'Unknown Razorpay error';
+      throw new Error(`Razorpay error: ${errorMsg}`);
     }
 
     const response = NextResponse.json({
