@@ -23,8 +23,8 @@ export async function OPTIONS(request: NextRequest) {
 // Initialize Razorpay with test keys
 // Get keys from environment variables or use test keys
 // For production, set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in environment variables
-const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || 'rzp_test_1DP5mmOlF5G5ag';
-const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || 'YOUR_RAZORPAY_TEST_SECRET_KEY';
+const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || 'rzp_test_S10gAhQQEnKuYr';
+const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || 'vvNvgwDNluGnA8GkHahHpgtp';
 
 // Check if secret key is still placeholder
 if (RAZORPAY_KEY_SECRET === 'YOUR_RAZORPAY_TEST_SECRET_KEY' || !RAZORPAY_KEY_SECRET) {
@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
       orderId: order.id,
       amount: order.amount,
       currency: order.currency,
-      key: process.env.RAZORPAY_KEY_ID || 'rzp_test_1DP5mmOlF5G5ag', // Return key for client
+      key: process.env.RAZORPAY_KEY_ID || 'rzp_test_S10gAhQQEnKuYr', // Return key for client
     });
     
     // Add CORS headers

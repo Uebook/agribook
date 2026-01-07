@@ -19,7 +19,7 @@ import { useAuth } from '../../context/AuthContext';
 import apiClient from '../../services/api';
 
 // Razorpay test key
-const RAZORPAY_KEY_ID = 'rzp_test_1DP5mmOlF5G5ag';
+const RAZORPAY_KEY_ID = 'rzp_test_S10gAhQQEnKuYr';
 
 const PaymentScreen = ({ route, navigation }) => {
   const { getThemeColors, getFontSizeMultiplier } = useSettings();
