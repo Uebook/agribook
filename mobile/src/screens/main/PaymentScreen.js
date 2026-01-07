@@ -21,7 +21,7 @@ import { useAuth } from '../../context/AuthContext';
 import apiClient from '../../services/api';
 
 // Razorpay test key
-const RAZORPAY_KEY_ID = 'rzp_test_S10gAhQQEnKuYr';
+const RAZORPAY_KEY_ID = 'rzp_test_S10srfDgCfFXIL';
 
 const PaymentScreen = ({ route, navigation }) => {
   const { getThemeColors, getFontSizeMultiplier } = useSettings();
@@ -131,7 +131,7 @@ const PaymentScreen = ({ route, navigation }) => {
           details: orderError.details,
           error: orderError,
         });
-        
+
         // Show detailed error to user
         const errorMessage = orderError.message || orderError.details || 'Failed to create payment order';
         Alert.alert(
@@ -254,153 +254,153 @@ const PaymentScreen = ({ route, navigation }) => {
 
       // Open Razorpay Checkout - This will open a native full-screen payment UI
       console.log('🚀 Calling RazorpayCheckout.open()...');
-      
+
       try {
         RazorpayCheckout.open(options)
-        .then(async (data) => {
-          // Clear timeout
-          if (razorpayTimeoutRef.current) {
-            clearTimeout(razorpayTimeoutRef.current);
-            razorpayTimeoutRef.current = null;
-          }
-
-          // Clear pending payment
-          await AsyncStorage.removeItem('pending_razorpay_payment');
-          setRazorpayOpened(false);
-
-          // Payment success - Razorpay SDK returns payment data
-          console.log('✅ Payment success data:', {
-            razorpay_payment_id: data.razorpay_payment_id,
-            razorpay_order_id: data.razorpay_order_id,
-            razorpay_signature: data.razorpay_signature ? 'present' : 'missing',
-          });
-
-          setProcessing(true); // Keep loading while verifying
-
-          try {
-            // Verify payment with backend
-            const verifyResponse = await apiClient.verifyRazorpayPayment(
-              data.razorpay_order_id,
-              data.razorpay_payment_id,
-              data.razorpay_signature,
-              userId,
-              bookId,
-              audioBookId,
-              itemPrice
-            );
-
-            console.log('✅ Payment verification response:', verifyResponse);
-
-            if (verifyResponse.success) {
-              Alert.alert(
-                'Payment Successful! 🎉',
-                'Your payment was successful and the book has been added to your library.',
-                [
-                  {
-                    text: 'OK',
-                    onPress: () => {
-                      // Navigate back and refresh if needed
-                      navigation.goBack();
-                    }
-                  },
-                ]
-              );
-            } else {
-              throw new Error('Payment verification failed');
+          .then(async (data) => {
+            // Clear timeout
+            if (razorpayTimeoutRef.current) {
+              clearTimeout(razorpayTimeoutRef.current);
+              razorpayTimeoutRef.current = null;
             }
-          } catch (verifyError) {
-            console.error('❌ Payment verification error:', verifyError);
-            Alert.alert(
-              'Verification Error',
-              'Your payment was successful, but we encountered an issue verifying it. Please contact support with your payment ID: ' + (data.razorpay_payment_id || 'N/A'),
-              [{ text: 'OK' }]
-            );
-          } finally {
-            setProcessing(false);
-          }
-        })
-        .catch(async (error) => {
-          // Clear timeout
-          if (razorpayTimeoutRef.current) {
-            clearTimeout(razorpayTimeoutRef.current);
-            razorpayTimeoutRef.current = null;
-          }
 
-          // Clear pending payment on error (unless it's just a cancellation)
-          if (error.code !== 2 && error.description !== 'Payment cancelled') {
+            // Clear pending payment
             await AsyncStorage.removeItem('pending_razorpay_payment');
-          }
-          setRazorpayOpened(false);
+            setRazorpayOpened(false);
 
-          // Payment failed or user cancelled
-          console.error('❌ Razorpay checkout error:', {
-            code: error.code,
-            description: error.description,
-            message: error.message,
-            error: error,
-          });
+            // Payment success - Razorpay SDK returns payment data
+            console.log('✅ Payment success data:', {
+              razorpay_payment_id: data.razorpay_payment_id,
+              razorpay_order_id: data.razorpay_order_id,
+              razorpay_signature: data.razorpay_signature ? 'present' : 'missing',
+            });
 
-          setProcessing(false);
+            setProcessing(true); // Keep loading while verifying
 
-          // Handle different error types
-          if (error.code === 'NETWORK_ERROR') {
-            Alert.alert(
-              'Network Error',
-              'Please check your internet connection and try again.',
-              [{ text: 'OK' }]
-            );
-          } else if (error.code === 'BAD_REQUEST_ERROR') {
+            try {
+              // Verify payment with backend
+              const verifyResponse = await apiClient.verifyRazorpayPayment(
+                data.razorpay_order_id,
+                data.razorpay_payment_id,
+                data.razorpay_signature,
+                userId,
+                bookId,
+                audioBookId,
+                itemPrice
+              );
+
+              console.log('✅ Payment verification response:', verifyResponse);
+
+              if (verifyResponse.success) {
+                Alert.alert(
+                  'Payment Successful! 🎉',
+                  'Your payment was successful and the book has been added to your library.',
+                  [
+                    {
+                      text: 'OK',
+                      onPress: () => {
+                        // Navigate back and refresh if needed
+                        navigation.goBack();
+                      }
+                    },
+                  ]
+                );
+              } else {
+                throw new Error('Payment verification failed');
+              }
+            } catch (verifyError) {
+              console.error('❌ Payment verification error:', verifyError);
+              Alert.alert(
+                'Verification Error',
+                'Your payment was successful, but we encountered an issue verifying it. Please contact support with your payment ID: ' + (data.razorpay_payment_id || 'N/A'),
+                [{ text: 'OK' }]
+              );
+            } finally {
+              setProcessing(false);
+            }
+          })
+          .catch(async (error) => {
+            // Clear timeout
+            if (razorpayTimeoutRef.current) {
+              clearTimeout(razorpayTimeoutRef.current);
+              razorpayTimeoutRef.current = null;
+            }
+
+            // Clear pending payment on error (unless it's just a cancellation)
+            if (error.code !== 2 && error.description !== 'Payment cancelled') {
+              await AsyncStorage.removeItem('pending_razorpay_payment');
+            }
+            setRazorpayOpened(false);
+
+            // Payment failed or user cancelled
+            console.error('❌ Razorpay checkout error:', {
+              code: error.code,
+              description: error.description,
+              message: error.message,
+              error: error,
+            });
+
+            setProcessing(false);
+
+            // Handle different error types
+            if (error.code === 'NETWORK_ERROR') {
+              Alert.alert(
+                'Network Error',
+                'Please check your internet connection and try again.',
+                [{ text: 'OK' }]
+              );
+            } else if (error.code === 'BAD_REQUEST_ERROR') {
+              Alert.alert(
+                'Payment Error',
+                error.description || 'Invalid payment request. Please try again.',
+                [{ text: 'OK' }]
+              );
+            } else if (error.description === 'Payment cancelled' || error.code === 'PAYMENT_CANCELLED' || error.code === 2) {
+              // User cancelled - don't show error, just log
+              console.log('Payment cancelled by user');
+              // Optionally show a message
+              // Alert.alert('Payment Cancelled', 'You cancelled the payment.', [{ text: 'OK' }]);
+            } else {
+              Alert.alert(
+                'Payment Failed',
+                error.description || error.message || 'Payment could not be completed. Please try again.',
+                [{ text: 'OK' }]
+              );
+            }
+          })
+          .catch((openError) => {
+            // This catches errors from RazorpayCheckout.open() itself
+            console.error('❌ RazorpayCheckout.open() failed:', openError);
+            setProcessing(false);
+            setRazorpayOpened(false);
+
+            // Clear timeout
+            if (razorpayTimeoutRef.current) {
+              clearTimeout(razorpayTimeoutRef.current);
+              razorpayTimeoutRef.current = null;
+            }
+
+            // Clear pending payment
+            AsyncStorage.removeItem('pending_razorpay_payment').catch(() => { });
+
             Alert.alert(
               'Payment Error',
-              error.description || 'Invalid payment request. Please try again.',
+              `Failed to open payment gateway: ${openError.message || 'Unknown error'}\n\nPlease try again or contact support.`,
               [{ text: 'OK' }]
             );
-          } else if (error.description === 'Payment cancelled' || error.code === 'PAYMENT_CANCELLED' || error.code === 2) {
-            // User cancelled - don't show error, just log
-            console.log('Payment cancelled by user');
-            // Optionally show a message
-            // Alert.alert('Payment Cancelled', 'You cancelled the payment.', [{ text: 'OK' }]);
-          } else {
-            Alert.alert(
-              'Payment Failed',
-              error.description || error.message || 'Payment could not be completed. Please try again.',
-              [{ text: 'OK' }]
-            );
-          }
-        })
-        .catch((openError) => {
-          // This catches errors from RazorpayCheckout.open() itself
-          console.error('❌ RazorpayCheckout.open() failed:', openError);
-          setProcessing(false);
-          setRazorpayOpened(false);
-          
-          // Clear timeout
-          if (razorpayTimeoutRef.current) {
-            clearTimeout(razorpayTimeoutRef.current);
-            razorpayTimeoutRef.current = null;
-          }
-          
-          // Clear pending payment
-          AsyncStorage.removeItem('pending_razorpay_payment').catch(() => {});
-          
-          Alert.alert(
-            'Payment Error',
-            `Failed to open payment gateway: ${openError.message || 'Unknown error'}\n\nPlease try again or contact support.`,
-            [{ text: 'OK' }]
-          );
-        });
+          });
       } catch (openError) {
         // Catch synchronous errors when calling open()
         console.error('❌ Error calling RazorpayCheckout.open():', openError);
         setProcessing(false);
         setRazorpayOpened(false);
-        
+
         // Clear timeout
         if (razorpayTimeoutRef.current) {
           clearTimeout(razorpayTimeoutRef.current);
           razorpayTimeoutRef.current = null;
         }
-        
+
         Alert.alert(
           'Payment Error',
           `Failed to initialize payment: ${openError.message || 'Unknown error'}`,

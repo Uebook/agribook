@@ -23,8 +23,8 @@ export async function OPTIONS(request: NextRequest) {
 // Initialize Razorpay - must be done inside the function to access runtime environment variables
 // In Vercel, environment variables are available at runtime, not at module load time
 function getRazorpayInstance() {
-  const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || 'rzp_test_S10gAhQQEnKuYr';
-  const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || 'vvNvgwDNluGnA8GkHahHpgtp';
+  const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || 'rzp_test_S10srfDgCfFXIL';
+  const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || 'wKdMJW6om9TdsV2XwWQyzcdh';
 
   // Check if secret key is still placeholder
   if (RAZORPAY_KEY_SECRET === 'YOUR_RAZORPAY_TEST_SECRET_KEY' || !RAZORPAY_KEY_SECRET) {
@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
       orderId: order.id,
       amount: order.amount,
       currency: order.currency,
-      key: process.env.RAZORPAY_KEY_ID || 'rzp_test_S10gAhQQEnKuYr', // Return key for client
+      key: process.env.RAZORPAY_KEY_ID || 'rzp_test_S10srfDgCfFXIL', // Return key for client
     });
     
     // Add CORS headers

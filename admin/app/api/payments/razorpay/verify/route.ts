@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
 
     // Verify payment signature
     // Get secret key from environment variables
-    const keySecret = process.env.RAZORPAY_KEY_SECRET || 'vvNvgwDNluGnA8GkHahHpgtp';
+    const keySecret = process.env.RAZORPAY_KEY_SECRET || 'wKdMJW6om9TdsV2XwWQyzcdh';
     const text = `${razorpay_order_id}|${razorpay_payment_id}`;
     const generatedSignature = crypto
       .createHmac('sha256', keySecret)
