@@ -530,23 +530,20 @@ const BookUploadScreen = ({ navigation }) => {
     }
 
     // Validate required fields for books
-    if (bookType === 'book') {
-      // PDF is now optional, but cover images are mandatory
-      if (coverImages.length === 0) {
-        Alert.alert('Error', 'Please upload at least one cover image. Cover image is required.');
-        return;
-      }
-    }
+    // Both PDF and cover images are now optional
+    // User can upload a book with just the basic information
 
     setIsUploading(true);
     setUploadProgress(0);
 
     try {
       if (bookType === 'book') {
-        // Calculate total steps - PDF is optional, images are mandatory
+        // Calculate total steps - Both PDF and images are optional
         let pdfUploadStep = pdfFile ? 1 : 0; // PDF is optional
-        let imageUploadSteps = coverImages.length; // At least one image is required
+        let imageUploadSteps = coverImages.length; // Images are optional
         let totalSteps = pdfUploadStep + imageUploadSteps + 1; // Files + Create record
+        // Ensure at least 1 step for book creation
+        if (totalSteps === 0) totalSteps = 1;
         let currentStep = 0;
 
         let pdfUrl = null;
@@ -582,7 +579,7 @@ const BookUploadScreen = ({ navigation }) => {
           }
         }
 
-        // Step 2: Upload cover images (REQUIRED - at least one)
+        // Step 2: Upload cover images (OPTIONAL)
         if (coverImages.length > 0) {
           setUploadProgress(Math.round((currentStep / totalSteps) * 100));
           const imageUploadPromises = [];
@@ -641,18 +638,11 @@ const BookUploadScreen = ({ navigation }) => {
             return; // Stop the upload process
           }
 
-          // Ensure we have at least one cover image URL
-          if (coverImageUrls.length === 0) {
-            Alert.alert(
-              'Upload Error',
-              'No cover images were uploaded successfully. Please try again.',
-              [{ text: 'OK', onPress: () => setIsUploading(false) }]
-            );
-            return;
-          }
+          // Cover images are optional, so we continue even if none were uploaded
+          // coverImageUrls will be empty array if no images uploaded
         }
 
-        // Step 3: Create book record (PDF is optional, cover images are required)
+        // Step 3: Create book record (Both PDF and cover images are optional)
         setUploadProgress(Math.round((currentStep / totalSteps) * 100));
         const bookPrice = parseFloat(formData.price) || 0;
         const bookData = {
@@ -667,8 +657,8 @@ const BookUploadScreen = ({ navigation }) => {
           isbn: formData.isbn || null,
           is_free: false,
           pdf_url: pdfUrl || null, // Optional
-          cover_image_url: coverImageUrls[0], // Required
-          cover_images: coverImageUrls, // Required - at least one
+          cover_image_url: coverImageUrls[0] || null, // Optional
+          cover_images: coverImageUrls.length > 0 ? coverImageUrls : [], // Optional
           published_date: new Date().toISOString(), // Set published date to current date
         };
         await apiClient.createBook(bookData);
@@ -1454,9 +1444,9 @@ const BookUploadScreen = ({ navigation }) => {
               </View>
 
               <View style={styles.uploadSection}>
-                <Text style={styles.sectionTitle}>Upload Cover Images (Multiple)</Text>
+                <Text style={styles.sectionTitle}>Upload Cover Images (Optional)</Text>
                 <Text style={[styles.uploadHint, { marginBottom: 12 }]}>
-                  You can upload multiple cover images for your book
+                  You can upload multiple cover images for your book (optional)
                 </Text>
                 <TouchableOpacity
                   style={styles.uploadButton}
