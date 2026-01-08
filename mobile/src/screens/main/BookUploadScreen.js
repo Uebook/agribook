@@ -531,10 +531,7 @@ const BookUploadScreen = ({ navigation }) => {
 
     // Validate required fields for books
     if (bookType === 'book') {
-      if (!pdfFile) {
-        Alert.alert('Error', 'Please upload a PDF file. PDF is required for books.');
-        return;
-      }
+      // PDF is now optional, but cover images are mandatory
       if (coverImages.length === 0) {
         Alert.alert('Error', 'Please upload at least one cover image. Cover image is required.');
         return;
@@ -546,8 +543,8 @@ const BookUploadScreen = ({ navigation }) => {
 
     try {
       if (bookType === 'book') {
-        // Calculate total steps - PDF and images are now mandatory
-        let pdfUploadStep = 1; // PDF is required
+        // Calculate total steps - PDF is optional, images are mandatory
+        let pdfUploadStep = pdfFile ? 1 : 0; // PDF is optional
         let imageUploadSteps = coverImages.length; // At least one image is required
         let totalSteps = pdfUploadStep + imageUploadSteps + 1; // Files + Create record
         let currentStep = 0;
@@ -555,42 +552,34 @@ const BookUploadScreen = ({ navigation }) => {
         let pdfUrl = null;
         let coverImageUrls = [];
 
-        // Step 1: Upload PDF file (REQUIRED)
-        setUploadProgress(Math.round((currentStep / totalSteps) * 100));
-        try {
-          const fileToUpload = pdfFile.file || {
-            uri: pdfFile.uri,
-            type: pdfFile.type || 'application/pdf',
-            name: pdfFile.name || 'book.pdf',
-          };
-          
-          // uploadFile will return { success: true, url: string } or throw Error
-          const pdfResult = await apiClient.uploadFile(fileToUpload, 'books', 'pdfs', userId);
-          console.log('✅ PDF upload successful:', pdfResult);
-          
-          // Extract URL - it's guaranteed to exist if we get here
-          pdfUrl = pdfResult.url;
-          
-          if (!pdfUrl) {
-            throw new Error('Upload succeeded but no URL returned');
-          }
-          
-          currentStep++;
+        // Step 1: Upload PDF file (OPTIONAL)
+        if (pdfFile) {
           setUploadProgress(Math.round((currentStep / totalSteps) * 100));
-        } catch (uploadError) {
-          console.error('❌ PDF upload failed:', uploadError);
-          
-          // Extract error message
-          const errorMessage = uploadError instanceof Error 
-            ? uploadError.message 
-            : String(uploadError) || 'Upload failed';
-          
-          Alert.alert(
-            'Upload Error',
-            `PDF upload failed: ${errorMessage}`,
-            [{ text: 'OK', onPress: () => setIsUploading(false) }]
-          );
-          return; // Stop the upload process
+          try {
+            const fileToUpload = pdfFile.file || {
+              uri: pdfFile.uri,
+              type: pdfFile.type || 'application/pdf',
+              name: pdfFile.name || 'book.pdf',
+            };
+            
+            // uploadFile will return { success: true, url: string } or throw Error
+            const pdfResult = await apiClient.uploadFile(fileToUpload, 'books', 'pdfs', userId);
+            console.log('✅ PDF upload successful:', pdfResult);
+            
+            // Extract URL - it's guaranteed to exist if we get here
+            pdfUrl = pdfResult.url;
+            
+            if (!pdfUrl) {
+              throw new Error('Upload succeeded but no URL returned');
+            }
+            
+            currentStep++;
+            setUploadProgress(Math.round((currentStep / totalSteps) * 100));
+          } catch (uploadError) {
+            console.warn('⚠️ PDF upload failed (optional):', uploadError);
+            // Don't stop the upload process if PDF fails - it's optional
+            // Just log the warning and continue
+          }
         }
 
         // Step 2: Upload cover images (REQUIRED - at least one)
@@ -687,7 +676,7 @@ const BookUploadScreen = ({ navigation }) => {
           category_id: formData.category,
           isbn: formData.isbn || null,
           is_free: false,
-          pdf_url: pdfUrl, // Required
+          pdf_url: pdfUrl || null, // Optional
           cover_image_url: coverImageUrls[0], // Required
           cover_images: coverImageUrls, // Required - at least one
           published_date: new Date().toISOString(), // Set published date to current date
@@ -1451,7 +1440,7 @@ const BookUploadScreen = ({ navigation }) => {
                   style={styles.uploadButton}
                   onPress={handleDocumentPicker}
                 >
-                  <Text style={styles.uploadButtonText}>📄 Choose PDF File</Text>
+                  <Text style={styles.uploadButtonText}>📄 Choose PDF File (Optional)</Text>
                   <Text style={styles.uploadHint}>PDF, EPUB, MOBI formats supported</Text>
                 </TouchableOpacity>
                 {pdfFile && (
