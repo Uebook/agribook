@@ -209,16 +209,31 @@ class ApiClient {
       throw new Error('File URI is required');
     }
 
-    const fileName = file.name || fileUri.split('/').pop() || 'file.pdf';
-    const fileType = file.type || 'application/pdf';
+    // Extract file name - ensure we have a valid name
+    let fileName = file.name;
+    if (!fileName) {
+      // Extract from URI
+      const uriParts = fileUri.split('/');
+      fileName = uriParts[uriParts.length - 1] || 'file.pdf';
+      // Remove query parameters if any
+      fileName = fileName.split('?')[0];
+    }
+    
+    // Use the actual file type, or fallback to application/octet-stream like OkHttp
+    const fileType = file.type || 'application/octet-stream';
 
-    // Create FormData
+    // Create FormData - React Native format
     const formData = new FormData();
+    
+    // Append file - React Native FormData format
+    // This matches the OkHttp pattern: addFormDataPart("file", "", RequestBody.create(...))
     formData.append('file', {
       uri: fileUri,
       type: fileType,
       name: fileName,
-    });
+    } as any); // Type assertion for React Native FormData
+    
+    // Append other fields as strings
     formData.append('fileName', fileName);
     formData.append('fileType', fileType);
     formData.append('bucket', bucket);
@@ -226,8 +241,19 @@ class ApiClient {
       formData.append('folder', folder);
     }
     if (authorId) {
-      formData.append('author_id', authorId);
+      formData.append('author_id', String(authorId));
     }
+    
+    // Log FormData structure for debugging
+    console.log('📦 FormData created:', {
+      fileName,
+      fileType,
+      bucket,
+      folder: folder || 'none',
+      authorId: authorId || 'none',
+      uriLength: fileUri.length,
+      uriPrefix: fileUri.substring(0, 20) + '...',
+    });
 
     const url = `${this.baseUrl}/api/upload`;
     
