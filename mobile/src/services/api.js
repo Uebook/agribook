@@ -317,18 +317,56 @@ class ApiClient {
       // Use 'in' operator to safely check for properties to avoid ReferenceError
       let finalUrl = null;
       
-      if ('url' in result && result.url && typeof result.url === 'string') {
-        console.log('✅ Found URL in result.url:', result.url);
-        finalUrl = result.url;
-      } else if ('data' in result && result.data && typeof result.data === 'object' && result.data !== null && 'url' in result.data && result.data.url && typeof result.data.url === 'string') {
-        console.log('✅ Found URL in result.data.url:', result.data.url);
-        finalUrl = result.data.url;
-      } else if ('publicUrl' in result && result.publicUrl && typeof result.publicUrl === 'string') {
-        console.log('✅ Found URL in result.publicUrl:', result.publicUrl);
-        finalUrl = result.publicUrl;
-      } else if ('signedUrl' in result && result.signedUrl && typeof result.signedUrl === 'string') {
-        console.log('✅ Found URL in result.signedUrl:', result.signedUrl);
-        finalUrl = result.signedUrl;
+      // Use bracket notation consistently to avoid any potential ReferenceError
+      if ('url' in result) {
+        try {
+          const urlValue = result['url'];
+          if (urlValue && typeof urlValue === 'string') {
+            console.log('✅ Found URL in result.url:', urlValue);
+            finalUrl = urlValue;
+          }
+        } catch (accessError) {
+          console.warn('Could not access result.url:', accessError);
+        }
+      }
+      
+      if (!finalUrl && 'data' in result && result['data'] && typeof result['data'] === 'object' && result['data'] !== null) {
+        try {
+          const data = result['data'];
+          if ('url' in data) {
+            const urlValue = data['url'];
+            if (urlValue && typeof urlValue === 'string') {
+              console.log('✅ Found URL in result.data.url:', urlValue);
+              finalUrl = urlValue;
+            }
+          }
+        } catch (accessError) {
+          console.warn('Could not access result.data.url:', accessError);
+        }
+      }
+      
+      if (!finalUrl && 'publicUrl' in result) {
+        try {
+          const urlValue = result['publicUrl'];
+          if (urlValue && typeof urlValue === 'string') {
+            console.log('✅ Found URL in result.publicUrl:', urlValue);
+            finalUrl = urlValue;
+          }
+        } catch (accessError) {
+          console.warn('Could not access result.publicUrl:', accessError);
+        }
+      }
+      
+      if (!finalUrl && 'signedUrl' in result) {
+        try {
+          const urlValue = result['signedUrl'];
+          if (urlValue && typeof urlValue === 'string') {
+            console.log('✅ Found URL in result.signedUrl:', urlValue);
+            finalUrl = urlValue;
+          }
+        } catch (accessError) {
+          console.warn('Could not access result.signedUrl:', accessError);
+        }
       }
       
       if (finalUrl) {
