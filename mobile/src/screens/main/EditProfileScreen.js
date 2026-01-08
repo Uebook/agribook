@@ -394,8 +394,15 @@ const EditProfileScreen = ({ navigation }) => {
             'avatars',
             'users'
           );
-          avatarUrl = uploadResult.url;
-          setAvatarUri(avatarUrl);
+          // Safely extract URL using bracket notation and 'in' operator
+          if (uploadResult && typeof uploadResult === 'object' && !(uploadResult instanceof Error)) {
+            avatarUrl = ('url' in uploadResult && uploadResult['url']) 
+              ? uploadResult['url'] 
+              : null;
+            if (avatarUrl) {
+              setAvatarUri(avatarUrl);
+            }
+          }
         } catch (uploadError) {
           console.error('Error uploading avatar:', uploadError);
           Alert.alert('Error', 'Failed to upload profile photo. Profile will be updated without photo.');

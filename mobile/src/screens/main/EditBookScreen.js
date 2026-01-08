@@ -32,17 +32,32 @@ import {
 
 // Helper: extract file URL
 const extractFileUrl = (res) => {
-  if (!res || typeof res !== 'object') return null;
-  return (
-    res.url ||
-    res.path ||
-    res.publicUrl ||
-    res.data?.url ||
-    res.data?.path ||
-    res.file?.url ||
-    res.file?.path ||
-    null
-  );
+  if (!res || typeof res !== 'object' || res === null || res instanceof Error) return null;
+  
+  try {
+    // Use 'in' operator and bracket notation to safely access properties
+    if ('url' in res && res['url'] && typeof res['url'] === 'string') return res['url'];
+    if ('path' in res && res['path'] && typeof res['path'] === 'string') return res['path'];
+    if ('publicUrl' in res && res['publicUrl'] && typeof res['publicUrl'] === 'string') return res['publicUrl'];
+    if ('signedUrl' in res && res['signedUrl'] && typeof res['signedUrl'] === 'string') return res['signedUrl'];
+    
+    if ('data' in res && res['data'] && typeof res['data'] === 'object' && res['data'] !== null) {
+      const data = res['data'];
+      if ('url' in data && data['url'] && typeof data['url'] === 'string') return data['url'];
+      if ('path' in data && data['path'] && typeof data['path'] === 'string') return data['path'];
+    }
+    
+    if ('file' in res && res['file'] && typeof res['file'] === 'object' && res['file'] !== null) {
+      const file = res['file'];
+      if ('url' in file && file['url'] && typeof file['url'] === 'string') return file['url'];
+      if ('path' in file && file['path'] && typeof file['path'] === 'string') return file['path'];
+    }
+  } catch (error) {
+    console.error('Error in extractFileUrl:', error);
+    return null;
+  }
+  
+  return null;
 };
 
 const EditBookScreen = ({ route, navigation }) => {
@@ -377,7 +392,13 @@ const EditBookScreen = ({ route, navigation }) => {
               'covers',
               userId
             );
-            coverImageUrls.push(uploadResult.url || extractFileUrl(uploadResult));
+            // Safely extract URL using bracket notation and 'in' operator
+            const imageUrl = ('url' in uploadResult && uploadResult['url']) 
+              ? uploadResult['url'] 
+              : extractFileUrl(uploadResult);
+            if (imageUrl) {
+              coverImageUrls.push(imageUrl);
+            }
           } else {
             // Existing image URL
             coverImageUrls.push(image.uri);
@@ -401,7 +422,13 @@ const EditBookScreen = ({ route, navigation }) => {
             'audio',
             userId
           );
-          audioBookData.audio_url = audioResult.url || extractFileUrl(audioResult);
+          // Safely extract URL using bracket notation and 'in' operator
+          const audioUrl = ('url' in audioResult && audioResult['url']) 
+            ? audioResult['url'] 
+            : extractFileUrl(audioResult);
+          if (audioUrl) {
+            audioBookData.audio_url = audioUrl;
+          }
         }
 
         await apiClient.updateAudioBook(audioId, audioBookData);
@@ -427,7 +454,13 @@ const EditBookScreen = ({ route, navigation }) => {
               'books',
               'covers'
             );
-            coverImageUrls.push(uploadResult.url);
+            // Safely extract URL using bracket notation and 'in' operator
+            const imageUrl = ('url' in uploadResult && uploadResult['url']) 
+              ? uploadResult['url'] 
+              : extractFileUrl(uploadResult);
+            if (imageUrl) {
+              coverImageUrls.push(imageUrl);
+            }
           } else {
             // Existing image URL
             coverImageUrls.push(image.uri);
