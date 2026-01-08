@@ -563,219 +563,31 @@ const BookUploadScreen = ({ navigation }) => {
             type: pdfFile.type || 'application/pdf',
             name: pdfFile.name || 'book.pdf',
           };
-          let pdfResult;
-          try {
-            pdfResult = await apiClient.uploadFile(fileToUpload, 'books', 'pdfs', userId);
-            console.log('PDF upload result:', pdfResult);
-          } catch (uploadApiError) {
-            // If uploadFile throws an error, re-throw it immediately
-            // Don't try to process it as a result
-            console.error('uploadFile threw an error:', uploadApiError);
-            throw uploadApiError;
+          
+          // uploadFile will return { success: true, url: string } or throw Error
+          const pdfResult = await apiClient.uploadFile(fileToUpload, 'books', 'pdfs', userId);
+          console.log('✅ PDF upload successful:', pdfResult);
+          
+          // Extract URL - it's guaranteed to exist if we get here
+          pdfUrl = pdfResult.url;
+          
+          if (!pdfUrl) {
+            throw new Error('Upload succeeded but no URL returned');
           }
-
-          // Validate response structure
-          // First check if pdfResult is an Error instance (shouldn't happen, but be safe)
-          if (pdfResult instanceof Error) {
-            throw pdfResult; // Re-throw the error
-          }
-
-          if (!pdfResult) {
-            throw new Error('Upload response is null or undefined');
-          }
-
-          if (typeof pdfResult !== 'object') {
-            throw new Error('Upload response is not an object: ' + typeof pdfResult);
-          }
-
-          // Check for error in response first - use 'in' operator to safely check
-          if ('error' in pdfResult) {
-            const errorValue = pdfResult['error'];
-            if (errorValue) {
-              const errorMsg = typeof errorValue === 'string' ? errorValue : 'Upload failed';
-              throw new Error(errorMsg);
-            }
-          }
-
-          // Check if response has success property and it's false
-          if ('success' in pdfResult && pdfResult['success'] === false) {
-            let errorMsg = 'Upload failed';
-            if ('error' in pdfResult) {
-              const errorValue = pdfResult['error'];
-              errorMsg = typeof errorValue === 'string' ? errorValue : 'Upload failed';
-            } else if ('message' in pdfResult) {
-              const messageValue = pdfResult['message'];
-              errorMsg = typeof messageValue === 'string' ? messageValue : 'Upload failed';
-            }
-            throw new Error(errorMsg);
-          }
-
-          // Handle response structure - API returns { success: true, url: ..., path: ... }
-          // The uploadFile function now returns a consistent structure with url property
-          // Safely check for url property using 'in' operator to avoid ReferenceError
-          let extractedUrl = null;
-          try {
-            if (pdfResult && typeof pdfResult === 'object' && pdfResult !== null && !(pdfResult instanceof Error)) {
-              // Use 'in' operator to safely check if property exists - this prevents ReferenceError
-              // Then use bracket notation or try-catch to safely access the value
-              if ('url' in pdfResult) {
-                try {
-                  // Use bracket notation to safely access property
-                  const urlValue = pdfResult['url'];
-                  if (urlValue && typeof urlValue === 'string') {
-                    extractedUrl = urlValue;
-                  }
-                } catch (accessError) {
-                  console.warn('Could not access url property:', accessError);
-                  // Continue to try extractFileUrl
-                }
-              }
-              
-              // If url not found, try extractFileUrl as fallback
-              if (!extractedUrl) {
-                extractedUrl = extractFileUrl(pdfResult);
-              }
-            } else {
-              // pdfResult is not a valid object or is an Error
-              throw new Error('Invalid response object received from upload API');
-            }
-          } catch (extractError) {
-            // Safely log error details without accessing properties that might not exist
-            try {
-              console.error('Error extracting URL from response:', extractError);
-              console.error('Response object type:', typeof pdfResult);
-              if (pdfResult) {
-                console.error('Response is Error?', pdfResult instanceof Error);
-                if (pdfResult && typeof pdfResult === 'object' && !(pdfResult instanceof Error)) {
-                  try {
-                    const keys = Object.keys(pdfResult);
-                    console.error('Response keys:', keys);
-                  } catch (keysError) {
-                    console.error('Could not get response keys:', keysError);
-                  }
-                }
-              } else {
-                console.error('Response is null or undefined');
-              }
-            } catch (logError) {
-              console.error('Error logging extract error details:', logError);
-            }
-            // Re-throw with more context
-            if (extractError instanceof Error) {
-              throw extractError;
-            }
-            const errorMsg = (extractError && typeof extractError === 'object' && 'message' in extractError) 
-              ? String(extractError.message) 
-              : 'Unknown error';
-            throw new Error('Failed to extract URL from upload response: ' + errorMsg);
-          }
-
-          if (!extractedUrl || typeof extractedUrl !== 'string' || extractedUrl.trim() === '') {
-            // Safely log response details without accessing properties that might not exist
-            try {
-              console.error('PDF upload response missing URL');
-              console.error('Response type:', typeof pdfResult);
-              if (pdfResult && typeof pdfResult === 'object' && !(pdfResult instanceof Error)) {
-                try {
-                  const keys = Object.keys(pdfResult);
-                  console.error('Response keys:', keys);
-                } catch (keysError) {
-                  console.error('Could not get response keys:', keysError);
-                }
-                // Try to stringify safely
-                try {
-                  console.error('Response object:', JSON.stringify(pdfResult, null, 2));
-                } catch (stringifyError) {
-                  console.error('Could not stringify response:', stringifyError);
-                }
-              } else {
-                console.error('Response is not a valid object or is an Error');
-              }
-            } catch (logError) {
-              console.error('Error logging response details:', logError);
-            }
-            throw new Error('Upload succeeded but no valid URL returned in response. Please check the server response.');
-          }
-
-          pdfUrl = extractedUrl;
+          
           currentStep++;
           setUploadProgress(Math.round((currentStep / totalSteps) * 100));
         } catch (uploadError) {
-          // Log error safely - don't try to serialize the error object directly as it might cause issues
-          try {
-            const errorStr = uploadError instanceof Error 
-              ? uploadError.toString() 
-              : String(uploadError);
-            console.error('PDF upload failed:', errorStr);
-            if (uploadError instanceof Error) {
-              console.error('Error message:', uploadError.message);
-              console.error('Error name:', uploadError.name);
-              if (uploadError.stack) {
-                console.error('Error stack:', uploadError.stack);
-              }
-            }
-          } catch (logError) {
-            console.error('PDF upload failed (could not log error details):', logError);
-          }
+          console.error('❌ PDF upload failed:', uploadError);
           
-          // Safely extract error message - NEVER access .url or other properties that might not exist
-          let errorMessage = 'Unknown error';
-          try {
-            if (uploadError) {
-              if (typeof uploadError === 'string') {
-                errorMessage = uploadError;
-              } else if (typeof uploadError === 'object' && uploadError !== null && !(uploadError instanceof Error)) {
-                // Only access properties that are guaranteed to exist on Error objects
-                if ('message' in uploadError && uploadError.message) {
-                  errorMessage = String(uploadError.message);
-                } else if ('error' in uploadError && uploadError.error) {
-                  errorMessage = typeof uploadError.error === 'string' ? uploadError.error : 'Upload failed';
-                } else {
-                  // Use toString() as last resort
-                  try {
-                    errorMessage = String(uploadError);
-                  } catch (toStringError) {
-                    errorMessage = 'Upload failed';
-                  }
-                }
-              } else if (uploadError instanceof Error) {
-                // It's an Error object - safely access message property
-                errorMessage = uploadError.message || 'Upload failed';
-              }
-            }
-          } catch (e) {
-            console.error('Error extracting error message:', e);
-            errorMessage = 'Upload failed. Please check your internet connection and try again.';
-          }
-          
-          // Log error type for debugging - use safe property access
-          try {
-            const errorType = uploadError ? (typeof uploadError) : 'null/undefined';
-            let errorName = 'N/A';
-            if (uploadError) {
-              if (uploadError instanceof Error) {
-                errorName = uploadError.name || 'Error';
-              } else if (typeof uploadError === 'object' && uploadError !== null && 'name' in uploadError) {
-                errorName = String(uploadError.name);
-              }
-            }
-            console.error('PDF upload error type:', errorType);
-            console.error('PDF upload error name:', errorName);
-          } catch (logError) {
-            console.error('Error logging error details:', logError);
-          }
-          
-          // Determine user-friendly error message
-          let userMessage = errorMessage;
-          if (errorMessage.includes('Network') || errorMessage.includes('network') || errorMessage.includes('fetch')) {
-            userMessage = 'Network error: Please check your internet connection and try again.';
-          } else if (errorMessage.includes('Property') && errorMessage.includes("doesn't exist")) {
-            userMessage = 'Upload failed: Invalid response from server. Please try again.';
-          }
+          // Extract error message
+          const errorMessage = uploadError instanceof Error 
+            ? uploadError.message 
+            : String(uploadError) || 'Upload failed';
           
           Alert.alert(
             'Upload Error',
-            `PDF upload failed: ${userMessage}`,
+            `PDF upload failed: ${errorMessage}`,
             [{ text: 'OK', onPress: () => setIsUploading(false) }]
           );
           return; // Stop the upload process
@@ -797,133 +609,22 @@ const BookUploadScreen = ({ navigation }) => {
               imageUploadPromises.push(
                 apiClient.uploadFile(imageFile, 'books', 'covers', userId)
                   .then((result) => {
-                    try {
-                      // Handle response structure - API returns { success: true, url: ..., path: ... }
-                      console.log(`Cover image ${i + 1} upload result:`, result);
-
-                      // Check if result exists and is an object
-                      if (!result) {
-                        throw new Error('Upload response is null or undefined');
-                      }
-
-                      if (typeof result !== 'object') {
-                        throw new Error('Upload response is not an object: ' + typeof result);
-                      }
-
-                      // Check for error in response
-                      if (result.error) {
-                        throw new Error(result.error || 'Upload failed');
-                      }
-
-                      // The uploadFile function now returns a consistent structure with url property
-                      // But use extractFileUrl as fallback for safety
-                      // Safely extract URL using 'in' operator to avoid ReferenceError
-                      let imageUrl = null;
-                      try {
-                        if (result && typeof result === 'object' && result !== null && !(result instanceof Error)) {
-                          // Use bracket notation to safely access url property
-                          if ('url' in result) {
-                            try {
-                              const urlValue = result['url'];
-                              if (urlValue && typeof urlValue === 'string') {
-                                imageUrl = urlValue;
-                              }
-                            } catch (accessError) {
-                              console.warn(`Could not access url property for cover image ${i + 1}:`, accessError);
-                            }
-                          }
-                          
-                          // If url not found, try extractFileUrl as fallback
-                          if (!imageUrl) {
-                            imageUrl = extractFileUrl(result);
-                          }
-                        } else {
-                          throw new Error('Invalid response object received from upload API');
-                        }
-                      } catch (extractError) {
-                        console.error(`Error extracting URL for cover image ${i + 1}:`, extractError);
-                        throw new Error('Failed to extract URL from upload response');
-                      }
-
-                      if (imageUrl && typeof imageUrl === 'string' && imageUrl.trim() !== '') {
-                        coverImageUrls.push(imageUrl);
-                        currentStep++;
-                        setUploadProgress(Math.round((currentStep / totalSteps) * 100));
-                        console.log(`Cover image ${i + 1} uploaded successfully:`, imageUrl);
-                      } else {
-                        console.error(`Cover image ${i + 1} response missing URL:`, result);
-                        throw new Error('Upload succeeded but no URL returned in response. Response: ' + JSON.stringify(result));
-                      }
-                    } catch (err) {
-                      console.error(`Cover image ${i + 1} processing error:`, err);
-                      throw err;
+                    // uploadFile returns { success: true, url: string }
+                    const imageUrl = result.url;
+                    if (!imageUrl) {
+                      throw new Error('Upload succeeded but no URL returned');
                     }
+                    coverImageUrls.push(imageUrl);
+                    currentStep++;
+                    setUploadProgress(Math.round((currentStep / totalSteps) * 100));
+                    console.log(`✅ Cover image ${i + 1} uploaded:`, imageUrl);
                   })
                   .catch((uploadError) => {
-                    console.error(`Cover image ${i + 1} upload failed:`, uploadError);
-                    // Extract error message safely - NEVER access .url or other properties that might not exist
-                    let errorMessage = 'Unknown error';
-                    try {
-                      if (uploadError) {
-                        if (typeof uploadError === 'string') {
-                          errorMessage = uploadError;
-                        } else if (uploadError && typeof uploadError === 'object' && uploadError !== null) {
-                          // Only access properties that are guaranteed to exist on Error objects
-                          if ('message' in uploadError && uploadError.message) {
-                            errorMessage = String(uploadError.message);
-                          } else if ('error' in uploadError && uploadError.error) {
-                            errorMessage = typeof uploadError.error === 'string' ? uploadError.error : 'Upload failed';
-                          } else {
-                            try {
-                              errorMessage = String(uploadError);
-                            } catch (toStringError) {
-                              errorMessage = 'Upload failed';
-                            }
-                          }
-                        }
-                      }
-                    } catch (e) {
-                      console.error(`Error extracting error message for cover image ${i + 1}:`, e);
-                      errorMessage = 'Upload failed. Please check your internet connection.';
-                    }
-
-                    // Check for network errors more thoroughly
-                    const isNetworkError =
-                      errorMessage?.includes('Network request failed') ||
-                      errorMessage?.includes('Failed to fetch') ||
-                      errorMessage?.includes('Network error') ||
-                      (uploadError && typeof uploadError === 'object' && 'name' in uploadError && uploadError.name === 'TypeError' && errorMessage?.includes('Network')) ||
-                      (uploadError && typeof uploadError === 'object' && 'name' in uploadError && uploadError.name === 'TypeError' && errorMessage?.includes('fetch'));
-
-                    // Safely log error details without accessing potentially problematic properties
-                    const errorDetails = {
-                      message: errorMessage,
-                      isNetworkError: isNetworkError,
-                      errorType: typeof uploadError,
-                    };
-                    
-                    // Safely add stack and name if they exist
-                    try {
-                      if (uploadError && typeof uploadError === 'object' && uploadError !== null) {
-                        if ('stack' in uploadError && uploadError.stack) {
-                          errorDetails.stack = String(uploadError.stack);
-                        }
-                        if ('name' in uploadError && uploadError.name) {
-                          errorDetails.name = String(uploadError.name);
-                        }
-                      } else {
-                        errorDetails.stack = 'No stack trace available';
-                        errorDetails.name = 'Unknown';
-                      }
-                    } catch (propertyError) {
-                      console.warn(`Could not extract error properties for cover image ${i + 1}:`, propertyError);
-                      errorDetails.stack = 'Error accessing error properties';
-                      errorDetails.name = 'Error';
-                    }
-                    
-                    console.error(`Cover image ${i + 1} error details:`, JSON.stringify(errorDetails, null, 2));
-                    // Re-throw to fail the upload if any image fails
-                    throw uploadError;
+                    console.error(`❌ Cover image ${i + 1} upload failed:`, uploadError);
+                    const errorMessage = uploadError instanceof Error 
+                      ? uploadError.message 
+                      : String(uploadError) || 'Upload failed';
+                    throw new Error(`Cover image ${i + 1}: ${errorMessage}`);
                   })
               );
             }

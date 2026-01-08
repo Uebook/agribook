@@ -195,261 +195,103 @@ class ApiClient {
     return this.request('/api/categories');
   }
 
-  // Upload API
+  // Upload API - SIMPLIFIED AND RELIABLE
   async uploadFile(file, bucket, folder, authorId = null) {
+    // Validate inputs
+    if (!file) {
+      throw new Error('File is required');
+    }
+
+    const fileUri = file.uri || file.path;
+    if (!fileUri) {
+      throw new Error('File URI is required');
+    }
+
+    const fileName = file.name || fileUri.split('/').pop() || 'file.pdf';
+    const fileType = file.type || 'application/pdf';
+
+    // Create FormData
+    const formData = new FormData();
+    formData.append('file', {
+      uri: fileUri,
+      type: fileType,
+      name: fileName,
+    });
+    formData.append('fileName', fileName);
+    formData.append('fileType', fileType);
+    formData.append('bucket', bucket);
+    if (folder) {
+      formData.append('folder', folder);
+    }
+    if (authorId) {
+      formData.append('author_id', authorId);
+    }
+
+    const url = `${this.baseUrl}/api/upload`;
+    
+    console.log('📤 Uploading file:', { fileName, fileType, bucket, folder });
+
     try {
-      // Validate file object
-      if (!file) {
-        throw new Error('File is required');
-      }
-
-      const formData = new FormData();
-
-      // Handle file URI - support both file:// and content:// URIs
-      const fileUri = file.uri || file.path;
-      if (!fileUri) {
-        throw new Error('File URI is required');
-      }
-
-      const fileName = file.name || (fileUri ? fileUri.split('/').pop() : 'file.pdf');
-      const fileType = file.type || 'application/pdf';
-
-      // React Native FormData: Send file directly using uri, type, and name
-      // React Native automatically reads the file from URI and sends it as binary data
-      const fileObject = {
-        uri: fileUri,
-        type: fileType,
-        name: fileName,
-      };
-      formData.append('file', fileObject);
-
-      // Append metadata
-      formData.append('fileName', fileName);
-      formData.append('fileType', fileType);
-      formData.append('bucket', bucket);
-      if (folder) {
-        formData.append('folder', folder);
-      }
-      // Append author_id if provided
-      if (authorId) {
-        formData.append('author_id', authorId);
-      }
-
-      const url = `${this.baseUrl}/api/upload`;
-      
-      console.log('Uploading file:', { 
-        fileName, 
-        fileType, 
-        bucket, 
-        folder, 
-        uri: fileUri.substring(0, 50) + '...',
-        url: url,
-        baseUrl: this.baseUrl
+      // Make the request
+      const response = await fetch(url, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Accept': '*/*',
+        },
       });
-      
-      // Send FormData - React Native handles file reading and sending automatically
-      let response;
-      try {
-        response = await fetch(url, {
-          method: 'POST',
-          body: formData,
-          // Do NOT set Content-Type - React Native FormData sets it automatically with boundary
-          headers: {
-            // Explicitly allow all headers for CORS
-            'Accept': '*/*',
-          },
-        });
-      } catch (fetchError) {
-        // Network error - fetch failed completely
-        console.error('Network error during fetch:', fetchError);
-        const networkErrorMessage = fetchError?.message || 'Network request failed';
-        throw new Error(`Network error: ${networkErrorMessage}. Please check your internet connection and try again.`);
-      }
 
-      console.log('Upload response:', { status: response.status, statusText: response.statusText });
-
-      // Read response as text first (can only read once)
+      // Read response as text
       const responseText = await response.text();
-      console.log('Upload response text (raw, first 500 chars):', responseText.substring(0, 500));
+      console.log('📥 Upload response status:', response.status);
+      console.log('📥 Upload response text (first 200 chars):', responseText.substring(0, 200));
 
-      if (!response.ok) {
-        console.error('Upload failed - HTTP status:', response.status);
-        let error;
-        try {
-          error = JSON.parse(responseText);
-          console.error('Upload failed - parsed error:', JSON.stringify(error, null, 2));
-        } catch (parseError) {
-          console.error('Upload failed - could not parse error as JSON:', responseText);
-          error = { error: responseText || 'Upload failed' };
-        }
-        const errorMessage = error.error || error.message || `Upload failed with status ${response.status}`;
-        throw new Error(errorMessage);
-      }
-
-      // Parse successful response
+      // Parse JSON response
       let result;
       try {
         result = JSON.parse(responseText);
-        console.log('📥 Upload response (parsed):', JSON.stringify(result, null, 2));
-        console.log('📥 Upload response type:', typeof result);
-        console.log('📥 Upload response keys:', result && typeof result === 'object' ? Object.keys(result) : 'N/A');
-        console.log('📥 Upload response has url?', result && typeof result === 'object' ? ('url' in result) : false);
       } catch (parseError) {
-        console.error('❌ Failed to parse upload response as JSON:', responseText);
-        throw new Error('Invalid JSON response from upload API: ' + parseError.message);
+        console.error('❌ Failed to parse response as JSON:', responseText);
+        throw new Error(`Server returned invalid response: ${responseText.substring(0, 100)}`);
       }
-      
-      // Ensure we have the expected structure
-      if (!result || typeof result !== 'object') {
-        console.error('❌ Upload response is not an object:', typeof result, result);
-        throw new Error('Upload response is invalid: ' + typeof result);
-      }
-      
-      // Check for error in response first - use 'in' operator to safely check
-      if ('error' in result && result.error) {
-        console.error('❌ Upload API returned error:', result.error);
-        const errorMsg = typeof result.error === 'string' ? result.error : 'Upload failed';
+
+      // Check for HTTP errors
+      if (!response.ok) {
+        const errorMsg = result.error || result.message || `Upload failed with status ${response.status}`;
         throw new Error(errorMsg);
       }
 
-      // The API returns { success: true, url: ..., path: ... }
-      // Check all possible formats and ensure we return a consistent structure
-      // Use 'in' operator to safely check for properties to avoid ReferenceError
-      let finalUrl = null;
-      
-      // Use bracket notation consistently to avoid any potential ReferenceError
-      if ('url' in result) {
-        try {
-          const urlValue = result['url'];
-          if (urlValue && typeof urlValue === 'string') {
-            console.log('✅ Found URL in result.url:', urlValue);
-            finalUrl = urlValue;
-          }
-        } catch (accessError) {
-          console.warn('Could not access result.url:', accessError);
-        }
+      // Check for error in response body
+      if (result.error) {
+        throw new Error(result.error);
       }
+
+      // Extract URL - API should always return { success: true, url: string }
+      const uploadUrl = result.url || result.publicUrl || result.signedUrl;
       
-      if (!finalUrl && 'data' in result && result['data'] && typeof result['data'] === 'object' && result['data'] !== null) {
-        try {
-          const data = result['data'];
-          if ('url' in data) {
-            const urlValue = data['url'];
-            if (urlValue && typeof urlValue === 'string') {
-              console.log('✅ Found URL in result.data.url:', urlValue);
-              finalUrl = urlValue;
-            }
-          }
-        } catch (accessError) {
-          console.warn('Could not access result.data.url:', accessError);
-        }
+      if (!uploadUrl || typeof uploadUrl !== 'string') {
+        console.error('❌ No URL in response:', result);
+        throw new Error('Upload succeeded but no URL returned. Please try again.');
       }
-      
-      if (!finalUrl && 'publicUrl' in result) {
-        try {
-          const urlValue = result['publicUrl'];
-          if (urlValue && typeof urlValue === 'string') {
-            console.log('✅ Found URL in result.publicUrl:', urlValue);
-            finalUrl = urlValue;
-          }
-        } catch (accessError) {
-          console.warn('Could not access result.publicUrl:', accessError);
-        }
-      }
-      
-      if (!finalUrl && 'signedUrl' in result) {
-        try {
-          const urlValue = result['signedUrl'];
-          if (urlValue && typeof urlValue === 'string') {
-            console.log('✅ Found URL in result.signedUrl:', urlValue);
-            finalUrl = urlValue;
-          }
-        } catch (accessError) {
-          console.warn('Could not access result.signedUrl:', accessError);
-        }
-      }
-      
-      if (finalUrl) {
-        // Return consistent structure with url property
-        // Use bracket notation and 'in' operator to safely access all properties
-        let pathValue = null;
-        let publicUrlValue = finalUrl;
-        let signedUrlValue = null;
-        
-        try {
-          if ('path' in result) {
-            pathValue = result['path'] || null;
-          }
-        } catch (e) {
-          console.warn('Could not access result.path:', e);
-        }
-        
-        try {
-          if ('publicUrl' in result) {
-            publicUrlValue = result['publicUrl'] || finalUrl;
-          }
-        } catch (e) {
-          console.warn('Could not access result.publicUrl:', e);
-        }
-        
-        try {
-          if ('signedUrl' in result) {
-            signedUrlValue = result['signedUrl'] || null;
-          }
-        } catch (e) {
-          console.warn('Could not access result.signedUrl:', e);
-        }
-        
-        return {
-          success: true,
-          url: finalUrl,
-          path: pathValue,
-          publicUrl: publicUrlValue,
-          signedUrl: signedUrlValue,
-        };
-      } else {
-        console.error('❌ Unexpected upload response structure - no URL found');
-        console.error('Response object:', JSON.stringify(result, null, 2));
-        console.error('Response keys:', Object.keys(result));
-        console.error('Response type:', typeof result);
-        throw new Error('Upload response missing URL field. Response: ' + JSON.stringify(result));
-      }
+
+      // Return consistent structure
+      return {
+        success: true,
+        url: uploadUrl,
+        path: result.path || null,
+        publicUrl: result.publicUrl || uploadUrl,
+        signedUrl: result.signedUrl || null,
+      };
     } catch (error) {
-      console.error('Upload error:', error);
+      console.error('❌ Upload error:', error);
       
-      // Extract error message safely
-      const errorMessage = error?.message || error?.error || 'Unknown error';
-      const errorName = error?.name || 'Unknown';
-      
-      // Check for network errors
-      const isNetworkError = 
-        errorMessage.includes('Network request failed') ||
-        errorMessage.includes('Failed to fetch') ||
-        errorMessage.includes('Network error') ||
-        (errorName === 'TypeError' && errorMessage.includes('Network')) ||
-        (errorName === 'TypeError' && errorMessage.includes('fetch'));
-      
-      console.error('Upload error details:', {
-        message: errorMessage,
-        name: errorName,
-        url: url,
-        baseUrl: this.baseUrl,
-        fileName,
-        fileType,
-        bucket,
-        folder,
-        isNetworkError: isNetworkError,
-      });
-      
-      // If it's a network error, provide a more helpful message
-      if (isNetworkError) {
-        throw new Error(`Network error: Unable to reach upload server. Please check your internet connection and try again.`);
+      // Provide user-friendly error messages
+      if (error.message.includes('Network request failed') || error.message.includes('Failed to fetch')) {
+        throw new Error('Network error: Please check your internet connection and try again.');
       }
       
-      // For other errors, create a new Error with a safe message
-      // Never re-throw the original error as it might have unexpected properties
-      const safeErrorMessage = errorMessage || 'Upload failed. Please try again.';
-      throw new Error(safeErrorMessage);
+      // Re-throw with original message
+      throw error;
     }
   }
 
@@ -473,29 +315,22 @@ class ApiClient {
     });
   }
 
-  async login(email, password) {
-    return this.request('/api/auth/login', {
+  async logout() {
+    return this.request('/api/auth/logout', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
-    });
-  }
-
-  async register(data) {
-    return this.request('/api/auth/register', {
-      method: 'POST',
-      body: JSON.stringify(data),
     });
   }
 
   // Orders API
-  async getOrders(userId, params = {}) {
-    const queryParams = new URLSearchParams({ user_id: userId });
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined) {
-        queryParams.append(key, value.toString());
-      }
+  async getOrders(userId) {
+    return this.request(`/api/orders?user_id=${userId}`);
+  }
+
+  async createOrder(data) {
+    return this.request('/api/orders', {
+      method: 'POST',
+      body: JSON.stringify(data),
     });
-    return this.request(`/api/orders?${queryParams.toString()}`);
   }
 
   // Wishlist API
@@ -511,27 +346,21 @@ class ApiClient {
   }
 
   async removeFromWishlist(userId, bookId) {
-    return this.request(`/api/wishlist?user_id=${userId}&book_id=${bookId}`, {
+    return this.request('/api/wishlist', {
       method: 'DELETE',
+      body: JSON.stringify({ user_id: userId, book_id: bookId }),
     });
   }
 
   // Notifications API
-  async getNotifications(userId, filter = 'all') {
-    return this.request(`/api/notifications?user_id=${userId}&filter=${filter}`);
+  async getNotifications(userId) {
+    return this.request(`/api/notifications?user_id=${userId}`);
   }
 
   async markNotificationAsRead(notificationId) {
-    return this.request('/api/notifications', {
+    return this.request(`/api/notifications/${notificationId}`, {
       method: 'PUT',
-      body: JSON.stringify({ notification_id: notificationId }),
-    });
-  }
-
-  async markAllNotificationsAsRead(userId) {
-    return this.request('/api/notifications', {
-      method: 'PUT',
-      body: JSON.stringify({ user_id: userId, mark_all: true }),
+      body: JSON.stringify({ read: true }),
     });
   }
 
@@ -547,96 +376,47 @@ class ApiClient {
     return this.request(`/api/youtube-channels${query ? `?${query}` : ''}`);
   }
 
-  // Purchase API - Create purchase record directly (no verification)
-  async purchaseBook(userId, bookId, paymentMethod, transactionId, audioBookId = null, amount = null) {
-    return this.request('/api/purchase', {
-      method: 'POST',
-      body: JSON.stringify({
-        user_id: userId,
-        book_id: bookId || null,
-        audio_book_id: audioBookId || null,
-        payment_method: paymentMethod,
-        transaction_id: transactionId,
-        amount: amount,
-      }),
-    });
+  async getYouTubeChannel(id) {
+    return this.request(`/api/youtube-channels/${id}`);
+  }
+
+  // Purchases API
+  async getPurchases(userId) {
+    return this.request(`/api/purchases?user_id=${userId}`);
   }
 
   // Razorpay API
-  async createRazorpayOrder(amount, bookId, audioBookId, userId) {
-    return this.request('/api/payments/razorpay/order', {
+  async createRazorpayOrder(data) {
+    return this.request('/api/payments/create-order', {
       method: 'POST',
-      body: JSON.stringify({
-        amount,
-        currency: 'INR',
-        bookId,
-        audioBookId,
-        userId,
-      }),
+      body: JSON.stringify(data),
     });
   }
 
-  async verifyRazorpayPayment(orderId, paymentId, signature, userId, bookId, audioBookId, amount) {
-    return this.request('/api/payments/razorpay/verify', {
+  async verifyRazorpayPayment(data) {
+    return this.request('/api/payments/verify-payment', {
       method: 'POST',
-      body: JSON.stringify({
-        razorpay_order_id: orderId,
-        razorpay_payment_id: paymentId,
-        razorpay_signature: signature,
-        userId,
-        bookId,
-        audioBookId,
-        amount,
-      }),
+      body: JSON.stringify(data),
     });
   }
 
   // Curriculum API
-  async getCurriculums(params = {}) {
-    const queryParams = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) {
-        queryParams.append(key, value.toString());
-      }
-    });
-    const query = queryParams.toString();
-    return this.request(`/api/curriculum${query ? `?${query}` : ''}`);
+  async getCurriculum() {
+    return this.request('/api/curriculum');
   }
 
   // Reviews API
-  async getReviews(bookId, params = {}) {
-    const queryParams = new URLSearchParams({ bookId });
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) {
-        queryParams.append(key, value.toString());
-      }
-    });
-    return this.request(`/api/reviews?${queryParams.toString()}`);
+  async getReviews(bookId) {
+    return this.request(`/api/reviews?book_id=${bookId}`);
   }
 
-  async createReview(bookId, userId, rating, comment) {
+  async createReview(data) {
     return this.request('/api/reviews', {
       method: 'POST',
-      body: JSON.stringify({ bookId, userId, rating, comment }),
-    });
-  }
-
-  async updateReview(reviewId, rating, comment) {
-    return this.request(`/api/reviews/${reviewId}`, {
-      method: 'PUT',
-      body: JSON.stringify({ rating, comment }),
-    });
-  }
-
-  async deleteReview(reviewId) {
-    return this.request(`/api/reviews/${reviewId}`, {
-      method: 'DELETE',
+      body: JSON.stringify(data),
     });
   }
 }
 
-// Export singleton instance
 const apiClient = new ApiClient();
 export default apiClient;
-
-
