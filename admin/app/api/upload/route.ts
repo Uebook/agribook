@@ -346,7 +346,7 @@ async function handleFileUpload(formData: FormData) {
       console.log('Processing file:', {
         isFile: fileObj instanceof File,
         isBlob: fileObj instanceof Blob,
-        type: typeof fileObj,
+        objectType: typeof fileObj,
         constructor: fileObj?.constructor?.name,
         hasArrayBuffer: typeof fileObj?.arrayBuffer === 'function',
         hasStream: typeof fileObj?.stream === 'function',
@@ -354,7 +354,7 @@ async function handleFileUpload(formData: FormData) {
         keys: fileObj ? Object.keys(fileObj) : [],
         size: (fileObj as any)?.size,
         name: (fileObj as any)?.name,
-        type: (fileObj as any)?.type,
+        mimeType: (fileObj as any)?.type,
       });
       
       // Method 1: File object (web) - This should work for React Native too
