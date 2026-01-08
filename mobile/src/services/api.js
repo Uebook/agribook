@@ -263,7 +263,7 @@ class ApiClient {
       uri: normalizedUri,
       type: fileType,
       name: fileName,
-    } as any); // Type assertion for React Native FormData
+    });
     
     // Append other fields as strings
     formData.append('fileName', fileName);
