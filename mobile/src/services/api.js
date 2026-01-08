@@ -310,18 +310,19 @@ class ApiClient {
 
       // The API returns { success: true, url: ..., path: ... }
       // Check all possible formats and ensure we return a consistent structure
+      // Use 'in' operator to safely check for properties to avoid ReferenceError
       let finalUrl = null;
       
-      if (result.url && typeof result.url === 'string') {
+      if ('url' in result && result.url && typeof result.url === 'string') {
         console.log('✅ Found URL in result.url:', result.url);
         finalUrl = result.url;
-      } else if (result.data && result.data && result.data.url && typeof result.data.url === 'string') {
+      } else if ('data' in result && result.data && typeof result.data === 'object' && result.data !== null && 'url' in result.data && result.data.url && typeof result.data.url === 'string') {
         console.log('✅ Found URL in result.data.url:', result.data.url);
         finalUrl = result.data.url;
-      } else if (result.publicUrl && typeof result.publicUrl === 'string') {
+      } else if ('publicUrl' in result && result.publicUrl && typeof result.publicUrl === 'string') {
         console.log('✅ Found URL in result.publicUrl:', result.publicUrl);
         finalUrl = result.publicUrl;
-      } else if (result.signedUrl && typeof result.signedUrl === 'string') {
+      } else if ('signedUrl' in result && result.signedUrl && typeof result.signedUrl === 'string') {
         console.log('✅ Found URL in result.signedUrl:', result.signedUrl);
         finalUrl = result.signedUrl;
       }

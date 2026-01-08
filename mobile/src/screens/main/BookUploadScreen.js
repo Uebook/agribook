@@ -673,9 +673,17 @@ const BookUploadScreen = ({ navigation }) => {
             errorMessage = 'Upload failed. Please check your internet connection and try again.';
           }
           
-          // Log error type for debugging
-          console.error('PDF upload error type:', typeof uploadError);
-          console.error('PDF upload error name:', uploadError && typeof uploadError === 'object' && 'name' in uploadError ? uploadError.name : 'N/A');
+          // Log error type for debugging - use safe property access
+          try {
+            const errorType = uploadError ? (typeof uploadError) : 'null/undefined';
+            const errorName = (uploadError && typeof uploadError === 'object' && 'name' in uploadError) 
+              ? String(uploadError.name) 
+              : 'N/A';
+            console.error('PDF upload error type:', errorType);
+            console.error('PDF upload error name:', errorName);
+          } catch (logError) {
+            console.error('Error logging error details:', logError);
+          }
           
           Alert.alert(
             'Upload Error',

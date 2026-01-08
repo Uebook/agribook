@@ -83,9 +83,10 @@ export async function POST(request: NextRequest) {
           return errorResponse;
         }
         
-        // Ensure url is present
-        if (!result.url) {
+        // Ensure url is present - use 'in' operator to safely check
+        if (!('url' in result) || !result.url) {
           console.error('❌ Upload result missing URL:', result);
+          console.error('Result keys:', Object.keys(result));
           const errorResponse = NextResponse.json(
             { error: 'Upload succeeded but no URL returned', details: result },
             { status: 500 }
