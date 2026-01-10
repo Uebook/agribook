@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
+import Pagination from '@/components/Pagination';
 import apiClient from '@/lib/api/client';
 
 interface Book {
@@ -35,18 +36,24 @@ export default function BooksPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [filter, setFilter] = useState<'all' | 'published' | 'pending' | 'rejected'>('all');
+    const [pagination, setPagination] = useState({
+        page: 1,
+        limit: 15,
+        total: 0,
+        totalPages: 0,
+    });
 
     useEffect(() => {
         fetchBooks();
-    }, [filter]);
+    }, [filter, pagination.page, pagination.limit]);
 
     const fetchBooks = async () => {
         try {
             setLoading(true);
             setError(null);
             const params: any = {
-                page: 1,
-                limit: 100, // Get more books for admin panel
+                page: pagination.page,
+                limit: pagination.limit,
             };
             
             // Always pass status parameter - 'all' to see all books, or specific status
@@ -55,6 +62,13 @@ export default function BooksPage() {
             
             const response = await apiClient.getBooks(params);
             setBooks(response.books || []);
+            if (response.pagination) {
+                setPagination(prev => ({
+                    ...prev,
+                    total: response.pagination.total || 0,
+                    totalPages: response.pagination.totalPages || 0,
+                }));
+            }
         } catch (err: any) {
             console.error('Error fetching books:', err);
             setError(err.message || 'Failed to fetch books');
@@ -86,6 +100,11 @@ export default function BooksPage() {
             console.error('Error rejecting book:', err);
             alert(`Failed to reject book: ${err.message || 'Unknown error'}`);
         }
+    };
+
+    const handleFilterChange = (newFilter: 'all' | 'published' | 'pending' | 'rejected') => {
+        setFilter(newFilter);
+        setPagination(prev => ({ ...prev, page: 1 })); // Reset to first page on filter change
     };
 
     const filteredBooks = books; // Already filtered by API
@@ -133,19 +152,17 @@ export default function BooksPage() {
                         <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
                             <div className="flex space-x-2">
                                 {(['all', 'published', 'pending', 'rejected'] as const).map((status) => {
-                                    const count = status === 'all' 
-                                        ? books.length 
-                                        : books.filter(b => b.status === status).length;
                                     return (
                                         <button
                                             key={status}
-                                            onClick={() => setFilter(status)}
+                                            onClick={() => handleFilterChange(status)}
                                             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${filter === status
                                                     ? 'bg-green-600 text-white'
                                                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                                 }`}
                                         >
-                                            {status.charAt(0).toUpperCase() + status.slice(1)} ({count})
+                                            {status.charAt(0).toUpperCase() + status.slice(1)}
+                                            {status === 'all' && ` (${pagination.total})`}
                                         </button>
                                     );
                                 })}
@@ -177,6 +194,7 @@ export default function BooksPage() {
                                 </button>
                             </div>
                         ) : (
+                            <>
                             <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                             <table className="min-w-full divide-y divide-gray-200">
                                 <thead className="bg-gray-50">
@@ -278,7 +296,18 @@ export default function BooksPage() {
                                     ))}
                                 </tbody>
                             </table>
-                        </div>
+                            </div>
+                            {pagination.totalPages > 0 && (
+                                <Pagination
+                                    currentPage={pagination.page}
+                                    totalPages={pagination.totalPages}
+                                    totalItems={pagination.total}
+                                    itemsPerPage={pagination.limit}
+                                    onPageChange={(page) => setPagination(prev => ({ ...prev, page }))}
+                                    onItemsPerPageChange={(limit) => setPagination(prev => ({ ...prev, limit, page: 1 }))}
+                                />
+                            )}
+                            </>
                         )}
                     </div>
                 </main>

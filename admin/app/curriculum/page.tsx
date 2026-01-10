@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
+import Pagination from '@/components/Pagination';
 import apiClient from '@/lib/api/client';
 
 export default function CurriculumPage() {
@@ -11,11 +12,11 @@ export default function CurriculumPage() {
   const [curriculums, setCurriculums] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [pagination, setPagination] = useState({ page: 1, limit: 50, total: 0, totalPages: 0 });
+  const [pagination, setPagination] = useState({ page: 1, limit: 15, total: 0, totalPages: 0 });
 
   useEffect(() => {
     fetchCurriculums();
-  }, []);
+  }, [pagination.page, pagination.limit]);
 
   const fetchCurriculums = async () => {
     try {
@@ -28,7 +29,13 @@ export default function CurriculumPage() {
         status: 'all' // Show all statuses
       });
       setCurriculums(response.curriculums || []);
-      setPagination(response.pagination || pagination);
+      if (response.pagination) {
+        setPagination(prev => ({
+          ...prev,
+          total: response.pagination.total || 0,
+          totalPages: response.pagination.totalPages || 0,
+        }));
+      }
     } catch (err: any) {
       console.error('Error fetching curriculums:', err);
       setError('Failed to load curriculums');
@@ -198,34 +205,16 @@ export default function CurriculumPage() {
                       ))}
                     </tbody>
                   </table>
-                  {pagination.totalPages > 1 && (
-                    <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
-                      <div className="text-sm text-gray-700">
-                        Showing {((pagination.page - 1) * pagination.limit) + 1} to {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} results
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            setPagination(prev => ({ ...prev, page: prev.page - 1 }));
-                            fetchCurriculums();
-                          }}
-                          disabled={pagination.page === 1}
-                          className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50"
-                        >
-                          Previous
-                        </button>
-                        <button
-                          onClick={() => {
-                            setPagination(prev => ({ ...prev, page: prev.page + 1 }));
-                            fetchCurriculums();
-                          }}
-                          disabled={pagination.page >= pagination.totalPages}
-                          className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50"
-                        >
-                          Next
-                        </button>
-                      </div>
-                    </div>
+                  </div>
+                  {pagination.totalPages > 0 && (
+                    <Pagination
+                      currentPage={pagination.page}
+                      totalPages={pagination.totalPages}
+                      totalItems={pagination.total}
+                      itemsPerPage={pagination.limit}
+                      onPageChange={(page) => setPagination(prev => ({ ...prev, page }))}
+                      onItemsPerPageChange={(limit) => setPagination(prev => ({ ...prev, limit, page: 1 }))}
+                    />
                   )}
                 </>
               )}

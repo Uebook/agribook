@@ -1,6 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/client';
 
+// CORS headers helper
+function getCorsHeaders() {
+  return {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Accept, Authorization',
+    'Access-Control-Max-Age': '86400',
+  };
+}
+
+// Handle OPTIONS request for CORS
+export async function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, {
+    status: 200,
+    headers: getCorsHeaders(),
+  });
+}
+
 // GET /api/audio-books - List audio books with pagination
 export async function GET(request: NextRequest) {
   try {
@@ -57,7 +75,7 @@ export async function GET(request: NextRequest) {
     
     const { count: totalCount } = await countQuery;
     
-    return NextResponse.json({
+    const response = NextResponse.json({
       audioBooks: audioBooks || [],
       pagination: {
         page,
@@ -66,12 +84,20 @@ export async function GET(request: NextRequest) {
         totalPages: Math.ceil((totalCount || 0) / limit),
       },
     });
+    Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+      response.headers.set(key, value);
+    });
+    return response;
   } catch (error) {
     console.error('Error in GET /api/audio-books:', error);
-    return NextResponse.json(
+    const errorResponse = NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
     );
+    Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+      errorResponse.headers.set(key, value);
+    });
+    return errorResponse;
   }
 }
 
@@ -96,10 +122,14 @@ export async function POST(request: NextRequest) {
     
     // Validate required fields
     if (!title || !author_id) {
-      return NextResponse.json(
+      const errorResponse = NextResponse.json(
         { error: 'Missing required fields: title and author_id are required' },
         { status: 400 }
       );
+      Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+        errorResponse.headers.set(key, value);
+      });
+      return errorResponse;
     }
     
     // Check if author exists, if not create one from user data
@@ -151,10 +181,14 @@ export async function POST(request: NextRequest) {
         .single();
       
       if (!category || categoryError) {
-        return NextResponse.json(
+        const errorResponse = NextResponse.json(
           { error: 'Invalid category_id: Category does not exist' },
           { status: 400 }
         );
+        Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+          errorResponse.headers.set(key, value);
+        });
+        return errorResponse;
       }
     }
     
@@ -188,10 +222,14 @@ export async function POST(request: NextRequest) {
       } else if (error.message) {
         errorMessage = `Failed to create audio book: ${error.message}`;
       }
-      return NextResponse.json(
+      const errorResponse = NextResponse.json(
         { error: errorMessage, details: error },
         { status: 500 }
       );
+      Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+        errorResponse.headers.set(key, value);
+      });
+      return errorResponse;
     }
     
     // Update author's audio books count (ignore errors if RPC doesn't exist)
@@ -204,13 +242,21 @@ export async function POST(request: NextRequest) {
       // Not critical, continue
     }
     
-    return NextResponse.json({ audioBook }, { status: 201 });
+    const response = NextResponse.json({ audioBook }, { status: 201 });
+    Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+      response.headers.set(key, value);
+    });
+    return response;
   } catch (error: any) {
     console.error('Error in POST /api/audio-books:', error);
-    return NextResponse.json(
+    const errorResponse = NextResponse.json(
       { error: 'Internal server error', details: error.message },
       { status: 500 }
     );
+    Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+      errorResponse.headers.set(key, value);
+    });
+    return errorResponse;
   }
 }
 

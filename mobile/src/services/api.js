@@ -3,10 +3,23 @@
  * Handles all API requests to Next.js API routes
  */
 
-// API Base URL - Using Vercel deployment URL
-// Production URL: https://admin-orcin-omega.vercel.app
-// Using Vercel URL for both development and production
-const API_BASE_URL = 'https://admin-orcin-omega.vercel.app';
+// API Base URL - Configure based on environment
+// Default: Use Vercel production URL (works on both emulator and physical devices)
+// To use local server: Set USE_LOCAL_SERVER = true
+const USE_LOCAL_SERVER = false; // Set to true to use local development server
+
+const API_BASE_URL = USE_LOCAL_SERVER
+  ? (__DEV__ 
+      ? 'http://10.0.2.2:3000' // Android emulator - use 10.0.2.2
+      : 'http://YOUR_IP:3000') // Physical device - replace YOUR_IP with your computer's IP (e.g., 192.168.1.100)
+  : 'https://admin-orcin-omega.vercel.app'; // Production Vercel URL (default)
+
+// Log the API URL being used for debugging
+console.log('🔗 API Configuration:', {
+  baseUrl: API_BASE_URL,
+  usingLocalServer: USE_LOCAL_SERVER,
+  isDev: __DEV__,
+});
 
 class ApiClient {
   constructor() {
@@ -27,8 +40,16 @@ class ApiClient {
       ...options,
     };
 
+    let timeoutId;
     try {
+      // Add timeout for all requests
+      const controller = new AbortController();
+      timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      
+      config.signal = controller.signal;
+      
       const response = await fetch(url, config);
+      if (timeoutId) clearTimeout(timeoutId);
       
       if (!response.ok) {
         let errorData;
@@ -49,10 +70,30 @@ class ApiClient {
 
       return await response.json();
     } catch (error) {
+      if (timeoutId) clearTimeout(timeoutId);
       console.error(`API Error (${endpoint}):`, error);
+      console.error(`API Error details:`, {
+        url,
+        method: options.method || 'GET',
+        baseUrl: this.baseUrl,
+        errorName: error.name,
+        errorMessage: error.message,
+        usingLocalServer: USE_LOCAL_SERVER,
+      });
+      
       // Re-throw with more context if it's a network error
+      if (error.name === 'AbortError') {
+        throw new Error(`Request timeout: ${url}. Please check your internet connection.`);
+      }
+      
       if (error.message === 'Network request failed' || error.name === 'TypeError') {
-        const networkError = new Error('Network error: Please check your internet connection');
+        const networkError = new Error(
+          `Network error: Cannot reach ${url}\n\n` +
+          `Please check:\n` +
+          `1. Internet connection\n` +
+          `2. If ${this.baseUrl} is accessible\n` +
+          `3. API server status`
+        );
         networkError.originalError = error;
         throw networkError;
       }
@@ -290,7 +331,15 @@ class ApiClient {
 
     const url = `${this.baseUrl}/api/upload`;
     
-    console.log(`📤 Uploading file (attempt ${retryCount + 1}/${MAX_RETRIES + 1}):`, { fileName, fileType, bucket, folder });
+    console.log(`📤 Uploading file (attempt ${retryCount + 1}/${MAX_RETRIES + 1}):`, { 
+      fileName, 
+      fileType, 
+      bucket, 
+      folder,
+      url,
+      baseUrl: this.baseUrl,
+      usingLocalServer: USE_LOCAL_SERVER,
+    });
 
     try {
       // Make the request with timeout
@@ -322,6 +371,15 @@ class ApiClient {
       } catch (fetchError) {
         clearTimeout(timeoutId);
         console.error(`❌ Fetch error (attempt ${retryCount + 1}):`, fetchError);
+        console.error(`❌ Fetch error details:`, {
+          name: fetchError.name,
+          message: fetchError.message,
+          url: url,
+          apiBaseUrl: this.baseUrl,
+          usingLocalServer: USE_LOCAL_SERVER,
+          isDev: __DEV__,
+          errorType: fetchError.constructor.name,
+        });
         
         // Handle different types of fetch errors
         if (fetchError.name === 'AbortError') {
@@ -331,17 +389,23 @@ class ApiClient {
             await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1))); // Exponential backoff
             return this.uploadFile(file, bucket, folder, authorId, retryCount + 1);
           }
-          throw new Error('Upload timeout: The request took too long. Please try again.');
+          throw new Error(`Upload timeout: The request took too long. URL: ${url}`);
         }
         
         // Retry on network errors if we have retries left
         if (fetchError.message && (fetchError.message.includes('Network request failed') || fetchError.message.includes('Failed to fetch'))) {
           if (retryCount < MAX_RETRIES) {
             console.log(`🔄 Network error, retrying... (${retryCount + 1}/${MAX_RETRIES})`);
+            console.log(`🔗 Trying URL: ${url}`);
             await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1))); // Exponential backoff
             return this.uploadFile(file, bucket, folder, authorId, retryCount + 1);
           }
-          throw new Error('Network error: Cannot reach the server. Please check your internet connection and try again.');
+          const errorMsg = `Network error: Cannot reach the server at ${url}. ` +
+            `Please check:\n` +
+            `1. Your internet connection\n` +
+            `2. If using local server, make sure admin server is running\n` +
+            `3. If using Vercel, check if the URL is accessible`;
+          throw new Error(errorMsg);
         }
         throw fetchError;
       }
@@ -418,7 +482,18 @@ class ApiClient {
       
       // Provide user-friendly error messages
       if (error.message && (error.message.includes('Network request failed') || error.message.includes('Failed to fetch') || error.message.includes('Cannot reach'))) {
-        throw new Error('Network error: Please check your internet connection and try again.');
+        const diagnosticMsg = `Network error: Cannot reach ${this.baseUrl}/api/upload\n\n` +
+          `Current configuration: ${USE_LOCAL_SERVER ? 'LOCAL SERVER' : 'VERCEL PRODUCTION'}\n\n` +
+          `Troubleshooting:\n` +
+          `1. Check internet connection\n` +
+          `2. Check if ${this.baseUrl} is accessible\n` +
+          (USE_LOCAL_SERVER 
+            ? `3. For local server:\n` +
+              `   - Android Emulator: Use http://10.0.2.2:3000\n` +
+              `   - Physical Device: Use http://YOUR_IP:3000\n` +
+              `   - Make sure admin server is running: cd admin && npm run dev\n`
+            : `3. For Vercel: Verify https://admin-orcin-omega.vercel.app is accessible\n`)
+        throw new Error(diagnosticMsg);
       }
       
       // Re-throw with original message

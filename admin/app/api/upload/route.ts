@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/client';
-import Busboy from 'busboy';
 
 // CORS headers helper
 function getCorsHeaders() {
@@ -20,7 +19,8 @@ export async function OPTIONS(request: NextRequest) {
   });
 }
 
-// POST /api/upload - Handles both file uploads and URL generation
+// POST /api/upload - Handles file uploads using Next.js FormData (same as profile upload)
+// Use Next.js built-in FormData parser which works with React Native FormData
 export async function POST(request: NextRequest) {
   try {
     const contentType = request.headers.get('content-type') || '';
@@ -30,13 +30,12 @@ export async function POST(request: NextRequest) {
       method: request.method,
       url: request.url,
       hasContentType: !!contentType,
+      isMultipart: contentType.includes('multipart') || contentType.includes('form-data'),
     });
     
-    // Try to detect if this is a file upload or URL generation request
-    // React Native FormData might not include "multipart/form-data" in the header
-    // So we try to parse as formData first, and if it fails, try as JSON
+    // Use Next.js FormData parser (same as profile upload)
+    // This works with React Native FormData out of the box
     try {
-      // Try to get formData - if it works, it's a file upload
       const formData = await request.formData();
       const file = formData.get('file');
       
@@ -46,24 +45,16 @@ export async function POST(request: NextRequest) {
         fileIsNull: file === null,
         fileIsUndefined: file === undefined,
         formDataKeys: Array.from(formData.keys()),
-        allFormDataEntries: Array.from(formData.entries()).map(([key, value]) => ({
-          key,
-          valueType: typeof value,
-          valueIsFile: value instanceof File,
-          valueIsBlob: value instanceof Blob,
-          valueConstructor: (value as any)?.constructor?.name,
-        })),
       });
       
       if (file && file !== 'null' && file !== 'undefined') {
-        // This is a file upload request - pass formData directly to avoid reading body twice
-        console.log('📤 Processing file upload...');
+        // This is a file upload request - use the same handler as profile upload
+        console.log('📤 Processing file upload with Next.js FormData parser...');
         const result = await handleFileUpload(formData);
         
         // If handleFileUpload returned an error response, return it directly
         if (result instanceof NextResponse) {
           console.error('❌ File upload returned error response');
-          // Add CORS headers to error response
           Object.entries(getCorsHeaders()).forEach(([key, value]) => {
             result.headers.set(key, value);
           });
@@ -83,10 +74,9 @@ export async function POST(request: NextRequest) {
           return errorResponse;
         }
         
-        // Ensure url is present - use 'in' operator to safely check
+        // Ensure url is present
         if (!('url' in result) || !result.url) {
           console.error('❌ Upload result missing URL:', result);
-          console.error('Result keys:', Object.keys(result));
           const errorResponse = NextResponse.json(
             { error: 'Upload succeeded but no URL returned', details: result },
             { status: 500 }
@@ -97,8 +87,7 @@ export async function POST(request: NextRequest) {
           return errorResponse;
         }
         
-        console.log('✅ File upload successful, returning response');
-        // Add CORS headers to success response
+        console.log('✅ File upload successful via Next.js FormData, returning response');
         const response = NextResponse.json(result);
         Object.entries(getCorsHeaders()).forEach(([key, value]) => {
           response.headers.set(key, value);
@@ -106,7 +95,7 @@ export async function POST(request: NextRequest) {
         return response;
       } else {
         console.warn('⚠️ No file found in FormData, trying URL generation...');
-        // No file found, might be URL generation with formData (unlikely but handle it)
+        // No file found, might be URL generation request
         return handleUrlGeneration(request);
       }
     } catch (formDataError: any) {
@@ -118,35 +107,17 @@ export async function POST(request: NextRequest) {
         errorName: formDataError.name,
       });
       
-      // If formData parsing fails but it's a multipart request, try busboy as fallback
-      if (contentType.includes('multipart') || contentType.includes('form-data')) {
-        console.log('🔄 Trying busboy as fallback for multipart form data...');
-        try {
-          const result = await handleFileUploadWithBusboy(request);
-          if (result) {
-            const response = NextResponse.json(result);
-            Object.entries(getCorsHeaders()).forEach(([key, value]) => {
-              response.headers.set(key, value);
-            });
-            return response;
-          }
-        } catch (busboyError: any) {
-          console.error('❌ Busboy parsing also failed:', busboyError);
-        }
-        
-        const errorResponse = NextResponse.json(
-          { 
-            error: 'Failed to parse file upload. Please ensure the file is being sent correctly.',
-            details: formDataError.message 
-          },
-          { status: 400 }
-        );
-        Object.entries(getCorsHeaders()).forEach(([key, value]) => {
-          errorResponse.headers.set(key, value);
-        });
-        return errorResponse;
-      }
-      return handleUrlGeneration(request);
+      const errorResponse = NextResponse.json(
+        { 
+          error: 'Failed to parse file upload. Please ensure the file is being sent correctly.',
+          details: formDataError.message 
+        },
+        { status: 400 }
+      );
+      Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+        errorResponse.headers.set(key, value);
+      });
+      return errorResponse;
     }
   } catch (error: any) {
     console.error('Error in POST /api/upload:', error);
@@ -154,7 +125,6 @@ export async function POST(request: NextRequest) {
       { error: 'Internal server error: ' + (error.message || 'Unknown error') },
       { status: 500 }
     );
-    // Add CORS headers to error response
     Object.entries(getCorsHeaders()).forEach(([key, value]) => {
       errorResponse.headers.set(key, value);
     });
@@ -162,119 +132,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Handle file upload with busboy (fallback for React Native)
-async function handleFileUploadWithBusboy(request: NextRequest) {
-  return new Promise<any>(async (resolve, reject) => {
-    try {
-      const supabase = createServerClient();
-      const contentType = request.headers.get('content-type') || '';
-      const busboy = Busboy({ headers: { 'content-type': contentType } });
-      const fileChunks: Buffer[] = [];
-      let fileBuffer: Buffer | null = null;
-      let fileName = 'file';
-      let fileType = 'application/octet-stream';
-      let bucket = '';
-      let folder = '';
-      let authorId: string | null = null;
-      let fileReceived = false;
-
-      busboy.on('file', (name, file, info) => {
-        console.log('📥 Busboy received file:', { name, filename: info.filename, encoding: info.encoding, mimeType: info.mimeType });
-        fileReceived = true;
-        fileName = info.filename || fileName;
-        fileType = info.mimeType || fileType;
-        
-        file.on('data', (chunk: Buffer) => {
-          fileChunks.push(chunk);
-        });
-
-        file.on('end', () => {
-          fileBuffer = Buffer.concat(fileChunks);
-          console.log('✅ Busboy file read complete:', { size: fileBuffer.length, fileName, fileType });
-        });
-      });
-
-      busboy.on('field', (name, value) => {
-        console.log('📝 Busboy field:', { name, value });
-        if (name === 'bucket') bucket = value;
-        else if (name === 'folder') folder = value;
-        else if (name === 'fileName') fileName = value;
-        else if (name === 'fileType') fileType = value;
-        else if (name === 'author_id') authorId = value;
-      });
-
-      busboy.on('finish', async () => {
-        try {
-          if (!fileReceived || !fileBuffer || !bucket) {
-            reject(new Error(`Missing file or bucket. fileReceived: ${fileReceived}, hasBuffer: ${!!fileBuffer}, bucket: ${bucket}`));
-            return;
-          }
-
-          // Generate unique file name
-          const timestamp = Date.now();
-          let uniqueFileName: string;
-          if (folder && authorId) {
-            uniqueFileName = `${folder}/${authorId}/${timestamp}-${fileName}`;
-          } else if (folder) {
-            uniqueFileName = `${folder}/${timestamp}-${fileName}`;
-          } else if (authorId) {
-            uniqueFileName = `${authorId}/${timestamp}-${fileName}`;
-          } else {
-            uniqueFileName = `${timestamp}-${fileName}`;
-          }
-
-          // Upload to Supabase
-          const { data, error } = await supabase.storage
-            .from(bucket)
-            .upload(uniqueFileName, fileBuffer, {
-              contentType: fileType,
-              cacheControl: '3600',
-              upsert: false,
-            });
-
-          if (error) {
-            console.error('Supabase upload error:', error);
-            reject(error);
-            return;
-          }
-
-          const { data: urlData } = supabase.storage
-            .from(bucket)
-            .getPublicUrl(uniqueFileName);
-
-          const { data: signedUrlData } = await supabase.storage
-            .from(bucket)
-            .createSignedUrl(uniqueFileName, 31536000); // 1 year
-
-          resolve({
-            success: true,
-            url: urlData.publicUrl,
-            path: uniqueFileName,
-            publicUrl: urlData.publicUrl,
-            signedUrl: signedUrlData?.signedUrl || urlData.publicUrl,
-          });
-        } catch (error: any) {
-          reject(error);
-        }
-      });
-
-      busboy.on('error', (error: Error) => {
-        console.error('Busboy error:', error);
-        reject(error);
-      });
-
-      // Get request body as array buffer and pipe to busboy
-      const arrayBuffer = await request.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      busboy.write(buffer);
-      busboy.end();
-    } catch (error: any) {
-      reject(error);
-    }
-  });
-}
-
-// Handle file upload
+// Handle file upload using Next.js FormData (same as profile upload)
 async function handleFileUpload(formData: FormData) {
   try {
     const supabase = createServerClient();

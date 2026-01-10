@@ -119,7 +119,9 @@ const BookUploadScreen = ({ navigation }) => {
   const isMountedRef = useRef(true);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
-  const [coverImages, setCoverImages] = useState([]); // Array of { id, uri, name, type, file }
+  const [uploadingCoverImage, setUploadingCoverImage] = useState(false);
+  const [coverImageUri, setCoverImageUri] = useState(null); // Single cover image URI
+  const [coverImageFile, setCoverImageFile] = useState(null); // Single cover image file for upload
   const [pdfFile, setPdfFile] = useState(null);
   const [audioFile, setAudioFile] = useState(null);
   const [bookType, setBookType] = useState('book'); // 'book' or 'audio'
@@ -151,19 +153,19 @@ const BookUploadScreen = ({ navigation }) => {
   }, []);
 
 
-  const handleImagePicker = () => {
-    // Show options for image selection
+  const handleImagePicker = useCallback(() => {
+    // Show options for image selection - same pattern as profile screen
     Alert.alert(
       'Select Cover Image',
       'Choose an option',
       [
         {
           text: 'Camera',
-          onPress: () => selectImageFromCamera(),
+          onPress: selectImageFromCamera,
         },
         {
           text: 'Gallery',
-          onPress: () => selectImageFromGallery(),
+          onPress: selectImageFromGallery,
         },
         {
           text: 'Cancel',
@@ -172,190 +174,86 @@ const BookUploadScreen = ({ navigation }) => {
       ],
       { cancelable: true }
     );
-  };
+  }, []);
 
-  const selectImageFromCamera = async () => {
-    try {
-      // Wait for interactions to complete to ensure activity is ready
-      await new Promise((resolve) => {
-        InteractionManager.runAfterInteractions(() => {
-          // Add small delay to ensure activity is ready
-          setTimeout(resolve, 100);
-        });
-      });
-
-      if (!isMountedRef.current) {
-        return;
-      }
-
-      const hasPermission = await requestPermissionWithFallback(
-        PERMISSIONS.CAMERA,
-        'Camera'
-      );
-      if (!hasPermission) {
-        return;
-      }
-
-      if (!isMountedRef.current) {
-        return;
-      }
-
-      launchCamera(
-        {
-          mediaType: 'photo',
-          quality: 0.8,
-          maxWidth: 2000,
-          maxHeight: 2000,
-          includeBase64: false,
-        },
-        (response) => {
-          if (!isMountedRef.current) {
-            return;
-          }
-          if (response.didCancel) {
-            return;
-          }
-          if (response.errorMessage) {
-            console.error('Camera error:', response.errorMessage);
-            Alert.alert(
-              'Error',
-              `Failed to take photo: ${response.errorMessage}\n\nPlease try again.`,
-              [{ text: 'OK' }]
-            );
-            return;
-          }
-          if (response.errorCode) {
-            console.error('Camera error code:', response.errorCode);
-            let errorMsg = 'Failed to take photo';
-            if (response.errorCode === 'permission') {
-              errorMsg = 'Permission denied. Please enable camera permission in app settings.';
-            } else if (response.errorCode === 'camera_unavailable') {
-              errorMsg = 'Camera is not available. Please try again.';
-            } else if (response.errorCode === 'others') {
-              errorMsg = response.errorMessage || 'Failed to take photo';
-            }
-            Alert.alert('Error', errorMsg, [{ text: 'OK' }]);
-            return;
-          }
-          if (response.assets && response.assets[0]) {
-            const asset = response.assets[0];
-            const newImage = {
-              id: Date.now().toString(),
-              uri: asset.uri || '',
-              type: asset.type || 'image/jpeg',
-              name: asset.fileName || asset.uri?.split('/').pop() || `cover_${Date.now()}.jpg`,
-              file: {
-                uri: asset.uri || '',
-                type: asset.type || 'image/jpeg',
-                name: asset.fileName || asset.uri?.split('/').pop() || `cover_${Date.now()}.jpg`,
-              },
-            };
-            setCoverImages((prev) => [...prev, newImage]);
-          }
-        }
-      );
-    } catch (err) {
-      console.error('Error launching camera:', err);
-      Alert.alert(
-        'Error',
-        `Failed to open camera: ${err?.message || 'Unknown error'}\n\nPlease try again.`,
-        [{ text: 'OK' }]
-      );
+  const selectImageFromCamera = useCallback(async () => {
+    const hasPermission = await requestPermissionWithFallback(
+      PERMISSIONS.CAMERA,
+      'Camera'
+    );
+    if (!hasPermission) {
+      return;
     }
-  };
 
-  const selectImageFromGallery = async () => {
-    try {
-      // Wait for interactions to complete to ensure activity is ready
-      await new Promise((resolve) => {
-        InteractionManager.runAfterInteractions(() => {
-          // Add longer delay to ensure activity is fully ready
-          setTimeout(resolve, 300);
-        });
-      });
-
-      if (!isMountedRef.current) {
-        return;
-      }
-
-      const hasPermission = await requestPermissionWithFallback(
-        PERMISSIONS.STORAGE,
-        'Storage'
-      );
-      if (!hasPermission) {
-        return;
-      }
-
-      if (!isMountedRef.current) {
-        return;
-      }
-
-      launchImageLibrary(
-        {
-          mediaType: 'photo',
-          quality: 0.8,
-          selectionLimit: 10, // Allow multiple images
-          maxWidth: 2000,
-          maxHeight: 2000,
-          includeBase64: false,
-        },
-        (response) => {
-          if (!isMountedRef.current) {
-            return;
-          }
-          if (response.didCancel) {
-            return;
-          }
-          if (response.errorMessage) {
-            console.error('Image picker error:', response.errorMessage);
-            Alert.alert(
-              'Error',
-              `Failed to select image: ${response.errorMessage}\n\nPlease try again.`,
-              [{ text: 'OK' }]
-            );
-            return;
-          }
-          if (response.errorCode) {
-            console.error('Image picker error code:', response.errorCode);
-            let errorMsg = 'Failed to select image';
-            if (response.errorCode === 'permission') {
-              errorMsg = 'Permission denied. Please enable storage permission in app settings.';
-            } else if (response.errorCode === 'others') {
-              errorMsg = response.errorMessage || 'Failed to select image';
-            }
-            Alert.alert('Error', errorMsg, [{ text: 'OK' }]);
-            return;
-          }
-          if (response.assets && response.assets.length > 0) {
-            const newImages = response.assets.map((asset, index) => ({
-              id: `${Date.now()}_${index}`,
-              uri: asset.uri || '',
-              type: asset.type || 'image/jpeg',
-              name: asset.fileName || asset.uri?.split('/').pop() || `cover_${Date.now()}_${index}.jpg`,
-              file: {
-                uri: asset.uri || '',
-                type: asset.type || 'image/jpeg',
-                name: asset.fileName || asset.uri?.split('/').pop() || `cover_${Date.now()}_${index}.jpg`,
-              },
-            }));
-            setCoverImages((prev) => [...prev, ...newImages]);
-          }
+    launchCamera(
+      {
+        mediaType: 'photo',
+        quality: 0.8,
+        maxWidth: 800,
+        maxHeight: 800,
+      },
+      (response) => {
+        if (response.didCancel) {
+          return;
         }
-      );
-    } catch (err) {
-      console.error('Error launching image library:', err);
-      const errorMessage = err?.message || err?.toString() || 'Unknown error';
-      Alert.alert(
-        'Error',
-        `Failed to open gallery: ${errorMessage}\n\nPlease try again.`,
-        [{ text: 'OK' }]
-      );
-    }
-  };
+        if (response.errorMessage) {
+          Alert.alert('Error', response.errorMessage);
+          return;
+        }
+        if (response.assets && response.assets[0]) {
+          const asset = response.assets[0];
+          setCoverImageUri(asset.uri || '');
+          setCoverImageFile({
+            uri: asset.uri || '',
+            type: asset.type || 'image/jpeg',
+            name: asset.fileName || `cover_${Date.now()}.jpg`,
+          });
+        }
+      }
+    );
+  }, []);
 
-  const removeImage = (imageId) => {
-    setCoverImages(coverImages.filter((img) => img.id !== imageId));
-  };
+  const selectImageFromGallery = useCallback(async () => {
+    const hasPermission = await requestPermissionWithFallback(
+      PERMISSIONS.STORAGE,
+      'Storage'
+    );
+    if (!hasPermission) {
+      return;
+    }
+
+    launchImageLibrary(
+      {
+        mediaType: 'photo',
+        quality: 0.8,
+        maxWidth: 800,
+        maxHeight: 800,
+      },
+      (response) => {
+        if (response.didCancel) {
+          return;
+        }
+        if (response.errorMessage) {
+          Alert.alert('Error', response.errorMessage);
+          return;
+        }
+        if (response.assets && response.assets[0]) {
+          const asset = response.assets[0];
+          setCoverImageUri(asset.uri || '');
+          setCoverImageFile({
+            uri: asset.uri || '',
+            type: asset.type || 'image/jpeg',
+            name: asset.fileName || `cover_${Date.now()}.jpg`,
+          });
+        }
+      }
+    );
+  }, []);
+
+  const removeCoverImage = useCallback(() => {
+    setCoverImageUri(null);
+    setCoverImageFile(null);
+  }, []);
 
   const handleDocumentPicker = async () => {
     try {
@@ -538,18 +436,58 @@ const BookUploadScreen = ({ navigation }) => {
 
     try {
       if (bookType === 'book') {
-        // Calculate total steps - Both PDF and images are optional
+        // Calculate total steps - Both PDF and cover image are optional
         let pdfUploadStep = pdfFile ? 1 : 0; // PDF is optional
-        let imageUploadSteps = coverImages.length; // Images are optional
-        let totalSteps = pdfUploadStep + imageUploadSteps + 1; // Files + Create record
+        let imageUploadStep = (coverImageFile && coverImageFile.uri && !coverImageFile.uri.startsWith('http')) ? 1 : 0; // Only upload if new image selected
+        let totalSteps = pdfUploadStep + imageUploadStep + 1; // Files + Create record
         // Ensure at least 1 step for book creation
         if (totalSteps === 0) totalSteps = 1;
         let currentStep = 0;
 
         let pdfUrl = null;
-        let coverImageUrls = [];
+        let coverImageUrl = coverImageUri && coverImageUri.startsWith('http') ? coverImageUri : null; // Use existing URL if it's already uploaded
 
-        // Step 1: Upload PDF file (OPTIONAL)
+        // Step 1: Upload cover image if a new one was selected (same pattern as profile screen)
+        if (coverImageFile && coverImageFile.uri && !coverImageFile.uri.startsWith('http')) {
+          setUploadingCoverImage(true);
+          setUploadProgress(Math.round((currentStep / totalSteps) * 100));
+          try {
+            const uploadResult = await apiClient.uploadFile(
+              coverImageFile,
+              'books',
+              'covers'
+              // Removed userId parameter to match profile upload pattern
+            );
+            // Safely extract URL using bracket notation and 'in' operator
+            if (uploadResult && typeof uploadResult === 'object' && !(uploadResult instanceof Error)) {
+              const uploadedUrl = ('url' in uploadResult && uploadResult['url']) 
+                ? uploadResult['url'] 
+                : null;
+              if (uploadedUrl) {
+                coverImageUrl = uploadedUrl;
+                setCoverImageUri(uploadedUrl);
+                console.log('✅ Cover image uploaded:', coverImageUrl);
+              }
+            }
+          } catch (uploadError) {
+            console.error('Error uploading cover image:', uploadError);
+            console.error('Upload error details:', {
+              message: uploadError?.message,
+              name: uploadError?.name,
+              stack: uploadError?.stack,
+            });
+            // Cover image is optional - don't show error alert, just log and continue
+            // The book will be created without cover image
+            console.warn('⚠️ Cover image upload failed (optional):', uploadError?.message || 'Unknown error');
+            coverImageUrl = null;
+          } finally {
+            setUploadingCoverImage(false);
+            currentStep++;
+            setUploadProgress(Math.round((currentStep / totalSteps) * 100));
+          }
+        }
+
+        // Step 2: Upload PDF file (OPTIONAL)
         if (pdfFile) {
           setUploadProgress(Math.round((currentStep / totalSteps) * 100));
           try {
@@ -560,7 +498,8 @@ const BookUploadScreen = ({ navigation }) => {
             };
             
             // uploadFile will return { success: true, url: string } or throw Error
-            const pdfResult = await apiClient.uploadFile(fileToUpload, 'books', 'pdfs', userId);
+            const pdfResult = await apiClient.uploadFile(fileToUpload, 'books', 'pdfs');
+            // Removed userId parameter to match profile upload pattern
             console.log('✅ PDF upload successful:', pdfResult);
             
             // Extract URL - it's guaranteed to exist if we get here
@@ -576,73 +515,11 @@ const BookUploadScreen = ({ navigation }) => {
             console.warn('⚠️ PDF upload failed (optional):', uploadError);
             // Don't stop the upload process if PDF fails - it's optional
             // Just log the warning and continue
+            pdfUrl = null;
           }
         }
 
-        // Step 2: Upload cover images (OPTIONAL)
-        if (coverImages.length > 0) {
-          setUploadProgress(Math.round((currentStep / totalSteps) * 100));
-          const imageUploadPromises = [];
-
-          for (let i = 0; i < coverImages.length; i++) {
-            if (coverImages[i].file || coverImages[i].uri) {
-              const imageFile = coverImages[i].file || {
-                uri: coverImages[i].uri,
-                type: coverImages[i].type || 'image/jpeg',
-                name: coverImages[i].name || `cover_${i}.jpg`,
-              };
-
-              imageUploadPromises.push(
-                apiClient.uploadFile(imageFile, 'books', 'covers', userId)
-                  .then((result) => {
-                    // uploadFile returns { success: true, url: string }
-                    const imageUrl = result.url;
-                    if (!imageUrl) {
-                      throw new Error('Upload succeeded but no URL returned');
-                    }
-                    coverImageUrls.push(imageUrl);
-                    currentStep++;
-                    setUploadProgress(Math.round((currentStep / totalSteps) * 100));
-                    console.log(`✅ Cover image ${i + 1} uploaded:`, imageUrl);
-                  })
-                  .catch((uploadError) => {
-                    console.error(`❌ Cover image ${i + 1} upload failed:`, uploadError);
-                    const errorMessage = uploadError instanceof Error 
-                      ? uploadError.message 
-                      : String(uploadError) || 'Upload failed';
-                    throw new Error(`Cover image ${i + 1}: ${errorMessage}`);
-                  })
-              );
-            }
-          }
-
-          // Wait for all image uploads - if any fail, stop the process
-          try {
-            await Promise.all(imageUploadPromises);
-          } catch (error) {
-            let errorMessage = 'Failed to upload cover images';
-            try {
-              if (error && typeof error === 'object' && error.message) {
-                errorMessage = error.message;
-              } else if (typeof error === 'string') {
-                errorMessage = error;
-              }
-            } catch (e) {
-              // Keep default error message
-            }
-            Alert.alert(
-              'Upload Error',
-              `Cover image upload failed:\n\n${errorMessage}\n\nPlease try again.`,
-              [{ text: 'OK', onPress: () => setIsUploading(false) }]
-            );
-            return; // Stop the upload process
-          }
-
-          // Cover images are optional, so we continue even if none were uploaded
-          // coverImageUrls will be empty array if no images uploaded
-        }
-
-        // Step 3: Create book record (Both PDF and cover images are optional)
+        // Step 3: Create book record (Both PDF and cover image are optional)
         setUploadProgress(Math.round((currentStep / totalSteps) * 100));
         const bookPrice = parseFloat(formData.price) || 0;
         const bookData = {
@@ -657,17 +534,30 @@ const BookUploadScreen = ({ navigation }) => {
           isbn: formData.isbn || null,
           is_free: false,
           pdf_url: pdfUrl || null, // Optional
-          cover_image_url: coverImageUrls[0] || null, // Optional
-          cover_images: coverImageUrls.length > 0 ? coverImageUrls : [], // Optional
+          cover_image_url: coverImageUrl || null, // Optional - single cover image
+          cover_images: coverImageUrl ? [coverImageUrl] : [], // Optional - array with single image
           published_date: new Date().toISOString(), // Set published date to current date
         };
         await apiClient.createBook(bookData);
         currentStep++;
         setUploadProgress(100);
 
+        // Build success message with info about optional components
+        let successMessage = 'Book uploaded successfully!';
+        const missingComponents = [];
+        if (!coverImageUrl && coverImageFile) {
+          missingComponents.push('cover image');
+        }
+        if (!pdfUrl && pdfFile) {
+          missingComponents.push('PDF');
+        }
+        if (missingComponents.length > 0) {
+          successMessage += `\n\nNote: ${missingComponents.join(' and ')} could not be uploaded due to network issues, but the book was created successfully.`;
+        }
+
         Alert.alert(
           'Success',
-          'Book uploaded successfully!',
+          successMessage,
           [
             {
               text: 'OK',
@@ -681,7 +571,8 @@ const BookUploadScreen = ({ navigation }) => {
                   pages: '',
                   isbn: '',
                 });
-                setCoverImages([]);
+                setCoverImageUri(null);
+                setCoverImageFile(null);
                 setPdfFile(null);
                 setUploadProgress(0);
                 navigation.goBack();
@@ -692,14 +583,48 @@ const BookUploadScreen = ({ navigation }) => {
       } else if (bookType === 'audio') {
         // Calculate total steps for audio book (files are optional)
         let audioUploadStep = audioFile ? 1 : 0;
-        let imageUploadSteps = coverImages.length > 0 ? coverImages.length : 0;
-        let totalSteps = audioUploadStep + imageUploadSteps + 1;
+        let imageUploadStep = (coverImageFile && coverImageFile.uri && !coverImageFile.uri.startsWith('http')) ? 1 : 0; // Only upload if new image selected
+        let totalSteps = audioUploadStep + imageUploadStep + 1;
         let currentStep = 0;
 
         let audioUrl = null;
-        let coverImageUrls = [];
+        let coverImageUrl = coverImageUri && coverImageUri.startsWith('http') ? coverImageUri : null; // Use existing URL if it's already uploaded
 
-        // Step 1: Upload audio file (OPTIONAL)
+        // Step 1: Upload cover image if a new one was selected (same pattern as profile screen)
+        if (coverImageFile && coverImageFile.uri && !coverImageFile.uri.startsWith('http')) {
+          setUploadingCoverImage(true);
+          setUploadProgress(Math.round((currentStep / totalSteps) * 100));
+          try {
+            const uploadResult = await apiClient.uploadFile(
+              coverImageFile,
+              'audio-books',
+              'covers',
+              userId
+            );
+            // Safely extract URL using bracket notation and 'in' operator
+            if (uploadResult && typeof uploadResult === 'object' && !(uploadResult instanceof Error)) {
+              const uploadedUrl = ('url' in uploadResult && uploadResult['url']) 
+                ? uploadResult['url'] 
+                : null;
+              if (uploadedUrl) {
+                coverImageUrl = uploadedUrl;
+                setCoverImageUri(uploadedUrl);
+                console.log('✅ Cover image uploaded:', coverImageUrl);
+              }
+            }
+          } catch (uploadError) {
+            console.error('Error uploading cover image:', uploadError);
+            // Cover image is optional - don't show error alert, just log and continue
+            console.warn('⚠️ Cover image upload failed (optional):', uploadError?.message || 'Unknown error');
+            coverImageUrl = null;
+          } finally {
+            setUploadingCoverImage(false);
+            currentStep++;
+            setUploadProgress(Math.round((currentStep / totalSteps) * 100));
+          }
+        }
+
+        // Step 2: Upload audio file (OPTIONAL)
         if (audioFile) {
           setUploadProgress(Math.round((currentStep / totalSteps) * 100));
           try {
@@ -708,7 +633,8 @@ const BookUploadScreen = ({ navigation }) => {
               type: audioFile.type || 'audio/mpeg',
               name: audioFile.name || 'audio.mp3',
             };
-            const audioResult = await apiClient.uploadFile(fileToUpload, 'audio-books', 'audio', userId);
+            const audioResult = await apiClient.uploadFile(fileToUpload, 'audio-books', 'audio');
+            // Removed userId parameter to match profile upload pattern
             audioUrl = audioResult.url;
             if (!audioUrl) {
               throw new Error('Upload succeeded but no URL returned');
@@ -719,43 +645,8 @@ const BookUploadScreen = ({ navigation }) => {
           } catch (uploadError) {
             console.warn('⚠️ Audio upload failed (optional):', uploadError);
             // Continue without audio
+            audioUrl = null;
           }
-        }
-
-        // Step 2: Upload cover images (OPTIONAL for testing)
-        if (coverImages.length > 0) {
-          setUploadProgress(Math.round((currentStep / totalSteps) * 100));
-          const imageUploadPromises = [];
-
-          for (let i = 0; i < coverImages.length; i++) {
-            if (coverImages[i].file || coverImages[i].uri) {
-              const imageFile = coverImages[i].file || {
-                uri: coverImages[i].uri,
-                type: coverImages[i].type || 'image/jpeg',
-                name: coverImages[i].name || `cover_${i}.jpg`,
-              };
-
-              imageUploadPromises.push(
-                apiClient.uploadFile(imageFile, 'audio-books', 'covers', userId)
-                  .then((result) => {
-                    const imageUrl = result.url;
-                    if (!imageUrl) {
-                      throw new Error('Upload succeeded but no URL returned');
-                    }
-                    coverImageUrls.push(imageUrl);
-                    currentStep++;
-                    setUploadProgress(Math.round((currentStep / totalSteps) * 100));
-                    console.log(`✅ Cover image ${i + 1} uploaded:`, imageUrl);
-                  })
-                  .catch((uploadError) => {
-                    console.warn(`⚠️ Cover image ${i + 1} upload failed (optional):`, uploadError);
-                    // Continue without this image
-                  })
-              );
-            }
-          }
-
-          await Promise.all(imageUploadPromises);
         }
 
         // Step 3: Create audio book record (even without files for testing)
@@ -769,7 +660,7 @@ const BookUploadScreen = ({ navigation }) => {
           category_id: formData.category,
           is_free: true, // Audio books default to free
           audio_url: audioUrl, // Can be null for testing
-          cover_url: coverImageUrls[0] || null, // Can be null for testing
+          cover_url: coverImageUrl || null, // Can be null for testing
           published_date: new Date().toISOString(), // Set published date to current date
         };
         // Create audio book record via API
@@ -778,9 +669,22 @@ const BookUploadScreen = ({ navigation }) => {
         currentStep++;
         setUploadProgress(100);
 
+        // Build success message with info about optional components
+        let successMessage = 'Audio book uploaded successfully!';
+        const missingComponents = [];
+        if (!coverImageUrl && coverImageFile) {
+          missingComponents.push('cover image');
+        }
+        if (!audioUrl && audioFile) {
+          missingComponents.push('audio file');
+        }
+        if (missingComponents.length > 0) {
+          successMessage += `\n\nNote: ${missingComponents.join(' and ')} could not be uploaded due to network issues, but the audio book was created successfully.`;
+        }
+
         Alert.alert(
           'Success',
-          'Audio book uploaded successfully!',
+          successMessage,
           [
             {
               text: 'OK',
@@ -794,7 +698,8 @@ const BookUploadScreen = ({ navigation }) => {
                   pages: '',
                   isbn: '',
                 });
-                setCoverImages([]);
+                setCoverImageUri(null);
+                setCoverImageFile(null);
                 setAudioFile(null);
                 setUploadProgress(0);
                 navigation.goBack();
@@ -1152,6 +1057,17 @@ const BookUploadScreen = ({ navigation }) => {
       borderRadius: 8,
       backgroundColor: themeColors.background.tertiary,
     },
+    imageLoadingOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderRadius: 8,
+    },
     removeImageButton: {
       position: 'absolute',
       top: -6,
@@ -1444,46 +1360,45 @@ const BookUploadScreen = ({ navigation }) => {
               </View>
 
               <View style={styles.uploadSection}>
-                <Text style={styles.sectionTitle}>Upload Cover Images (Optional)</Text>
-                <Text style={[styles.uploadHint, { marginBottom: 12 }]}>
-                  You can upload multiple cover images for your book (optional)
-                </Text>
+                <Text style={styles.sectionTitle}>Cover Image (Optional)</Text>
                 <TouchableOpacity
                   style={styles.uploadButton}
                   onPress={handleImagePicker}
+                  disabled={uploadingCoverImage || isUploading}
                 >
-                  <Text style={styles.uploadButtonText}>🖼️ Add Cover Image</Text>
-                  <Text style={styles.uploadHint}>JPG, PNG formats supported</Text>
-                </TouchableOpacity>
-                {coverImages.length > 0 && (
-                  <View style={styles.imagePreviewContainer}>
-                    {coverImages.map((image) => (
-                      <View key={image.id} style={styles.imagePreviewWrapper}>
-                        <Image
-                          source={{ uri: image.uri }}
-                          style={styles.imagePreview}
-                          resizeMode="cover"
-                        />
-                        <TouchableOpacity
-                          style={styles.removeImageButton}
-                          onPress={() => removeImage(image.id)}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={styles.removeImageIcon}>✕</Text>
-                        </TouchableOpacity>
-                        {image.name && (
-                          <Text style={styles.imageName} numberOfLines={1}>
-                            {image.name}
-                          </Text>
-                        )}
-                      </View>
-                    ))}
-                  </View>
-                )}
-                {coverImages.length > 0 && (
-                  <Text style={styles.imageCountText}>
-                    {coverImages.length} image{coverImages.length > 1 ? 's' : ''} selected
+                  <Text style={styles.uploadButtonText}>
+                    {uploadingCoverImage ? 'Uploading...' : '🖼️ Add Cover Image'}
                   </Text>
+                  <Text style={styles.uploadHint}>JPG, PNG formats supported (Optional)</Text>
+                </TouchableOpacity>
+                {coverImageUri && (
+                  <View style={styles.imagePreviewContainer}>
+                    <View style={styles.imagePreviewWrapper}>
+                      <Image
+                        source={{ uri: coverImageUri }}
+                        style={styles.imagePreview}
+                        resizeMode="cover"
+                      />
+                      {uploadingCoverImage && (
+                        <View style={styles.imageLoadingOverlay}>
+                          <ActivityIndicator size="small" color={themeColors.text.light} />
+                        </View>
+                      )}
+                      <TouchableOpacity
+                        style={styles.removeImageButton}
+                        onPress={removeCoverImage}
+                        activeOpacity={0.7}
+                        disabled={uploadingCoverImage || isUploading}
+                      >
+                        <Text style={styles.removeImageIcon}>✕</Text>
+                      </TouchableOpacity>
+                      {coverImageFile && coverImageFile.name && (
+                        <Text style={styles.imageName} numberOfLines={1}>
+                          {coverImageFile.name}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
                 )}
               </View>
             </>
@@ -1519,43 +1434,45 @@ const BookUploadScreen = ({ navigation }) => {
                 </View>
               )}
               <View style={styles.uploadSection}>
-                <Text style={styles.sectionTitle}>Cover Image for Podcast</Text>
+                <Text style={styles.sectionTitle}>Cover Image for Podcast (Optional)</Text>
                 <TouchableOpacity
                   style={styles.uploadButton}
                   onPress={handleImagePicker}
+                  disabled={uploadingCoverImage || isUploading}
                 >
-                  <Text style={styles.uploadButtonText}>🖼️ Add Cover Image</Text>
-                  <Text style={styles.uploadHint}>JPG, PNG formats supported</Text>
-                </TouchableOpacity>
-                {coverImages.length > 0 && (
-                  <View style={styles.imagePreviewContainer}>
-                    {coverImages.map((image) => (
-                      <View key={image.id} style={styles.imagePreviewWrapper}>
-                        <Image
-                          source={{ uri: image.uri }}
-                          style={styles.imagePreview}
-                          resizeMode="cover"
-                        />
-                        <TouchableOpacity
-                          style={styles.removeImageButton}
-                          onPress={() => removeImage(image.id)}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={styles.removeImageIcon}>✕</Text>
-                        </TouchableOpacity>
-                        {image.name && (
-                          <Text style={styles.imageName} numberOfLines={1}>
-                            {image.name}
-                          </Text>
-                        )}
-                      </View>
-                    ))}
-                  </View>
-                )}
-                {coverImages.length > 0 && (
-                  <Text style={styles.imageCountText}>
-                    {coverImages.length} image{coverImages.length > 1 ? 's' : ''} selected
+                  <Text style={styles.uploadButtonText}>
+                    {uploadingCoverImage ? 'Uploading...' : '🖼️ Add Cover Image'}
                   </Text>
+                  <Text style={styles.uploadHint}>JPG, PNG formats supported (Optional)</Text>
+                </TouchableOpacity>
+                {coverImageUri && (
+                  <View style={styles.imagePreviewContainer}>
+                    <View style={styles.imagePreviewWrapper}>
+                      <Image
+                        source={{ uri: coverImageUri }}
+                        style={styles.imagePreview}
+                        resizeMode="cover"
+                      />
+                      {uploadingCoverImage && (
+                        <View style={styles.imageLoadingOverlay}>
+                          <ActivityIndicator size="small" color={themeColors.text.light} />
+                        </View>
+                      )}
+                      <TouchableOpacity
+                        style={styles.removeImageButton}
+                        onPress={removeCoverImage}
+                        activeOpacity={0.7}
+                        disabled={uploadingCoverImage || isUploading}
+                      >
+                        <Text style={styles.removeImageIcon}>✕</Text>
+                      </TouchableOpacity>
+                      {coverImageFile && coverImageFile.name && (
+                        <Text style={styles.imageName} numberOfLines={1}>
+                          {coverImageFile.name}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
                 )}
               </View>
             </View>

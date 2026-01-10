@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
+import Pagination from '@/components/Pagination';
 import apiClient from '@/lib/api/client';
 
 export default function AudioBooksPage() {
@@ -11,19 +12,25 @@ export default function AudioBooksPage() {
   const [audioBooks, setAudioBooks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 0 });
+  const [pagination, setPagination] = useState({ page: 1, limit: 15, total: 0, totalPages: 0 });
 
   useEffect(() => {
     fetchAudioBooks();
-  }, []);
+  }, [pagination.page, pagination.limit]);
 
   const fetchAudioBooks = async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await apiClient.getAudioBooks({ page: pagination.page, limit: pagination.limit });
+      const response = await apiClient.getAudioBooks({ page: pagination.page, limit: pagination.limit, status: 'all' });
       setAudioBooks(response.audioBooks || []);
-      setPagination(response.pagination || pagination);
+      if (response.pagination) {
+        setPagination(prev => ({
+          ...prev,
+          total: response.pagination.total || 0,
+          totalPages: response.pagination.totalPages || 0,
+        }));
+      }
     } catch (err: any) {
       console.error('Error fetching audio books:', err);
       setError('Failed to load audio books');
@@ -199,34 +206,16 @@ export default function AudioBooksPage() {
                       ))}
                     </tbody>
                   </table>
-                  {pagination.totalPages > 1 && (
-                    <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
-                      <div className="text-sm text-gray-700">
-                        Showing {((pagination.page - 1) * pagination.limit) + 1} to {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} results
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            setPagination(prev => ({ ...prev, page: prev.page - 1 }));
-                            fetchAudioBooks();
-                          }}
-                          disabled={pagination.page === 1}
-                          className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50"
-                        >
-                          Previous
-                        </button>
-                        <button
-                          onClick={() => {
-                            setPagination(prev => ({ ...prev, page: prev.page + 1 }));
-                            fetchAudioBooks();
-                          }}
-                          disabled={pagination.page >= pagination.totalPages}
-                          className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50"
-                        >
-                          Next
-                        </button>
-                      </div>
-                    </div>
+                  </div>
+                  {pagination.totalPages > 0 && (
+                    <Pagination
+                      currentPage={pagination.page}
+                      totalPages={pagination.totalPages}
+                      totalItems={pagination.total}
+                      itemsPerPage={pagination.limit}
+                      onPageChange={(page) => setPagination(prev => ({ ...prev, page }))}
+                      onItemsPerPageChange={(limit) => setPagination(prev => ({ ...prev, limit, page: 1 }))}
+                    />
                   )}
                 </>
               )}

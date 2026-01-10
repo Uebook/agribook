@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
+import Pagination from '@/components/Pagination';
 import apiClient from '@/lib/api/client';
 
 interface User {
@@ -24,17 +25,33 @@ export default function UsersPage() {
     const [users, setUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [pagination, setPagination] = useState({
+        page: 1,
+        limit: 15,
+        total: 0,
+        totalPages: 0,
+    });
 
     useEffect(() => {
         fetchUsers();
-    }, []);
+    }, [pagination.page, pagination.limit]);
 
     const fetchUsers = async () => {
         try {
             setLoading(true);
             setError(null);
-            const response = await apiClient.getUsers();
+            const response = await apiClient.getUsers({
+                page: pagination.page,
+                limit: pagination.limit,
+            });
             setUsers(response.users || []);
+            if (response.pagination) {
+                setPagination(prev => ({
+                    ...prev,
+                    total: response.pagination.total || 0,
+                    totalPages: response.pagination.totalPages || 0,
+                }));
+            }
         } catch (err: any) {
             console.error('Error fetching users:', err);
             setError(err.message || 'Failed to fetch users');
@@ -102,6 +119,7 @@ export default function UsersPage() {
                                 <p className="text-gray-500">No users found.</p>
                             </div>
                         ) : (
+                            <>
                             <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                             <table className="min-w-full divide-y divide-gray-200">
                                 <thead className="bg-gray-50">
@@ -186,7 +204,18 @@ export default function UsersPage() {
                                     ))}
                                 </tbody>
                             </table>
-                        </div>
+                            </div>
+                            {pagination.totalPages > 0 && (
+                                <Pagination
+                                    currentPage={pagination.page}
+                                    totalPages={pagination.totalPages}
+                                    totalItems={pagination.total}
+                                    itemsPerPage={pagination.limit}
+                                    onPageChange={(page) => setPagination(prev => ({ ...prev, page }))}
+                                    onItemsPerPageChange={(limit) => setPagination(prev => ({ ...prev, limit, page: 1 }))}
+                                />
+                            )}
+                            </>
                         )}
                     </div>
                 </main>

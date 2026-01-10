@@ -1,6 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/client';
 
+// CORS headers helper
+function getCorsHeaders() {
+  return {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Accept, Authorization',
+    'Access-Control-Max-Age': '86400',
+  };
+}
+
+// Handle OPTIONS request for CORS
+export async function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, {
+    status: 200,
+    headers: getCorsHeaders(),
+  });
+}
+
 // GET /api/books - List books with pagination
 export async function GET(request: NextRequest) {
   try {
@@ -14,7 +32,7 @@ export async function GET(request: NextRequest) {
 
     // Filters
     const categoryId = searchParams.get('category');
-    const authorId = searchParams.get('author');
+    const authorId = searchParams.get('authorId') || searchParams.get('author'); // Support both parameter names
     const language = searchParams.get('language');
     const search = searchParams.get('search');
     // Default to 'published' for security - only show published books unless explicitly requested
@@ -151,7 +169,7 @@ export async function GET(request: NextRequest) {
       status,
     });
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       books: books || [],
       pagination: {
         page,
@@ -160,12 +178,22 @@ export async function GET(request: NextRequest) {
         totalPages: Math.ceil((totalCount || 0) / limit),
       },
     });
+    // Add CORS headers
+    Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+      response.headers.set(key, value);
+    });
+    return response;
   } catch (error) {
     console.error('Error in GET /api/books:', error);
-    return NextResponse.json(
+    const errorResponse = NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
     );
+    // Add CORS headers to error response
+    Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+      errorResponse.headers.set(key, value);
+    });
+    return errorResponse;
   }
 }
 
@@ -205,10 +233,15 @@ export async function POST(request: NextRequest) {
 
     // Validate required fields
     if (!title || !author_id || !category_id) {
-      return NextResponse.json(
+      const errorResponse = NextResponse.json(
         { error: 'Missing required fields: title, author_id, and category_id are required' },
         { status: 400 }
       );
+      // Add CORS headers to error response
+      Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+        errorResponse.headers.set(key, value);
+      });
+      return errorResponse;
     }
 
     // Check if author exists, if not create one from user data
@@ -254,19 +287,27 @@ export async function POST(request: NextRequest) {
             .single();
 
           if (!retryAuthor) {
-            return NextResponse.json(
+            const errorResponse = NextResponse.json(
               { error: `Failed to create author record: ${createAuthorError.message}` },
               { status: 400 }
             );
+            Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+              errorResponse.headers.set(key, value);
+            });
+            return errorResponse;
           }
         } else {
           finalAuthorId = newAuthor.id;
         }
       } else {
-        return NextResponse.json(
+        const errorResponse = NextResponse.json(
           { error: `Author ID ${author_id} not found in users table. Please ensure the user exists.` },
           { status: 400 }
         );
+        Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+          errorResponse.headers.set(key, value);
+        });
+        return errorResponse;
       }
     }
 
@@ -279,13 +320,17 @@ export async function POST(request: NextRequest) {
 
     if (!category || categoryError) {
       console.error('Category validation error:', categoryError);
-      return NextResponse.json(
+      const errorResponse = NextResponse.json(
         {
           error: `Invalid category_id: Category with ID ${category_id} does not exist. Please select a valid category.`,
           details: categoryError?.message || 'Category not found'
         },
         { status: 400 }
       );
+      Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+        errorResponse.headers.set(key, value);
+      });
+      return errorResponse;
     }
 
     console.log('Category validated:', category.name);
@@ -345,10 +390,14 @@ export async function POST(request: NextRequest) {
       } else if (error.message) {
         errorMessage = `Failed to create book: ${error.message}`;
       }
-      return NextResponse.json(
+      const errorResponse = NextResponse.json(
         { error: errorMessage, details: error },
         { status: 500 }
       );
+      Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+        errorResponse.headers.set(key, value);
+      });
+      return errorResponse;
     }
 
     // Log successful creation with image info
@@ -370,13 +419,23 @@ export async function POST(request: NextRequest) {
       // Not critical, continue
     }
 
-    return NextResponse.json({ book }, { status: 201 });
+    const response = NextResponse.json({ book }, { status: 201 });
+    // Add CORS headers to success response
+    Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+      response.headers.set(key, value);
+    });
+    return response;
   } catch (error: any) {
     console.error('Error in POST /api/books:', error);
-    return NextResponse.json(
+    const errorResponse = NextResponse.json(
       { error: 'Internal server error', details: error.message },
       { status: 500 }
     );
+    // Add CORS headers to error response
+    Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+      errorResponse.headers.set(key, value);
+    });
+    return errorResponse;
   }
 }
 

@@ -210,8 +210,19 @@ class ApiClient {
   }
 
   // Categories API
-  async getCategories() {
-    return this.request<{ categories: any[] }>('/api/categories');
+  async getCategories(params?: { page?: number; limit?: number }) {
+    const queryParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          queryParams.append(key, value.toString());
+        }
+      });
+    }
+    const query = queryParams.toString();
+    return this.request<{ categories: any[]; pagination: any }>(
+      `/api/categories${query ? `?${query}` : ''}`
+    );
   }
 
   async getCategory(id: string) {

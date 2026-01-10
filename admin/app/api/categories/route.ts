@@ -1,15 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/client';
 
-// GET /api/categories - List all categories
+// GET /api/categories - List categories with pagination
 export async function GET(request: NextRequest) {
   try {
     const supabase = createServerClient();
+    const searchParams = request.nextUrl.searchParams;
     
-    const { data: categories, error } = await supabase
+    // Pagination
+    const page = parseInt(searchParams.get('page') || '1');
+    const limit = parseInt(searchParams.get('limit') || '15');
+    const offset = (page - 1) * limit;
+    
+    // Build query with pagination
+    const { data: categories, error, count } = await supabase
       .from('categories')
-      .select('*')
-      .order('name', { ascending: true });
+      .select('*', { count: 'exact' })
+      .order('name', { ascending: true })
+      .range(offset, offset + limit - 1);
     
     if (error) {
       console.error('Error fetching categories:', error);
@@ -19,7 +27,15 @@ export async function GET(request: NextRequest) {
       );
     }
     
-    return NextResponse.json({ categories: categories || [] });
+    return NextResponse.json({
+      categories: categories || [],
+      pagination: {
+        page,
+        limit,
+        total: count || 0,
+        totalPages: Math.ceil((count || 0) / limit),
+      },
+    });
   } catch (error) {
     console.error('Error in GET /api/categories:', error);
     return NextResponse.json(

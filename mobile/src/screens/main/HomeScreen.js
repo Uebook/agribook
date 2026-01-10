@@ -46,7 +46,7 @@ const HomeScreen = ({ navigation }) => {
         // For authors: fetch only their own books (all statuses)
         // For readers: fetch all published books
         const params = isAuthor && userId 
-          ? { authorId: userId, status: 'all', limit: 100 } // Get all books by this author (all statuses)
+          ? { author: userId, status: 'all', limit: 100 } // Get all books by this author (all statuses) - using 'author' to match API
           : { status: 'published', limit: 50 };
         
         // Fetch books and audio books (critical data)
@@ -55,7 +55,7 @@ const HomeScreen = ({ navigation }) => {
             console.error('Error fetching books:', err);
             return { books: [] };
           }),
-          apiClient.getAudioBooks(isAuthor && userId ? { authorId: userId, limit: 100 } : { limit: 50 }).catch(err => {
+          apiClient.getAudioBooks(isAuthor && userId ? { author: userId, limit: 100 } : { limit: 50 }).catch(err => {
             console.error('Error fetching audio books:', err);
             return { audioBooks: [] };
           }),

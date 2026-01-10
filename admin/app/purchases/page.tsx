@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
+import Pagination from '@/components/Pagination';
 import apiClient from '@/lib/api/client';
 
 interface Purchase {
@@ -43,9 +44,12 @@ interface Purchase {
 export default function PurchasesPage() {
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [total, setTotal] = useState(0);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 15,
+    total: 0,
+    totalPages: 0,
+  });
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedBookType, setSelectedBookType] = useState<string>('all');
   const [categories, setCategories] = useState<any[]>([]);
@@ -56,7 +60,7 @@ export default function PurchasesPage() {
 
   useEffect(() => {
     fetchPurchases();
-  }, [page, selectedCategory, selectedBookType]);
+  }, [pagination.page, pagination.limit, selectedCategory, selectedBookType]);
 
   const fetchCategories = async () => {
     try {
@@ -71,8 +75,8 @@ export default function PurchasesPage() {
     try {
       setLoading(true);
       const params = new URLSearchParams({
-        page: page.toString(),
-        limit: '20',
+        page: pagination.page.toString(),
+        limit: pagination.limit.toString(),
       });
       
       if (selectedCategory !== 'all') {
@@ -91,8 +95,13 @@ export default function PurchasesPage() {
         setPurchases([]);
       } else {
         setPurchases(data.purchases || []);
-        setTotalPages(data.pagination?.totalPages || 1);
-        setTotal(data.pagination?.total || 0);
+        if (data.pagination) {
+          setPagination(prev => ({
+            ...prev,
+            total: data.pagination.total || 0,
+            totalPages: data.pagination.totalPages || 0,
+          }));
+        }
       }
     } catch (error) {
       console.error('Error fetching purchases:', error);
@@ -142,7 +151,7 @@ export default function PurchasesPage() {
                     value={selectedBookType}
                     onChange={(e) => {
                       setSelectedBookType(e.target.value);
-                      setPage(1); // Reset to first page when filter changes
+                      setPagination(prev => ({ ...prev, page: 1 })); // Reset to first page when filter changes
                     }}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                   >
@@ -159,7 +168,7 @@ export default function PurchasesPage() {
                     value={selectedCategory}
                     onChange={(e) => {
                       setSelectedCategory(e.target.value);
-                      setPage(1); // Reset to first page when filter changes
+                      setPagination(prev => ({ ...prev, page: 1 })); // Reset to first page when filter changes
                     }}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                   >
@@ -173,7 +182,7 @@ export default function PurchasesPage() {
                 </div>
                 <div className="flex items-end">
                   <div className="text-sm text-gray-600">
-                    Total: <span className="font-semibold text-gray-900">{total}</span> purchases
+                    Total: <span className="font-semibold text-gray-900">{pagination.total}</span> purchases
                   </div>
                 </div>
               </div>
@@ -267,32 +276,15 @@ export default function PurchasesPage() {
                 </table>
 
                 {/* Pagination */}
-                {totalPages > 1 && (
-                  <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
-                    <div className="text-sm text-gray-700">
-                      Showing {((page - 1) * 20) + 1} to {Math.min(page * 20, total)} of {total} results
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => {
-                          setPage(prev => Math.max(1, prev - 1));
-                        }}
-                        disabled={page === 1}
-                        className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50"
-                      >
-                        Previous
-                      </button>
-                      <button
-                        onClick={() => {
-                          setPage(prev => Math.min(totalPages, prev + 1));
-                        }}
-                        disabled={page >= totalPages}
-                        className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50"
-                      >
-                        Next
-                      </button>
-                    </div>
-                  </div>
+                {pagination.totalPages > 0 && (
+                  <Pagination
+                    currentPage={pagination.page}
+                    totalPages={pagination.totalPages}
+                    totalItems={pagination.total}
+                    itemsPerPage={pagination.limit}
+                    onPageChange={(page) => setPagination(prev => ({ ...prev, page }))}
+                    onItemsPerPageChange={(limit) => setPagination(prev => ({ ...prev, limit, page: 1 }))}
+                  />
                 )}
               </div>
             )}

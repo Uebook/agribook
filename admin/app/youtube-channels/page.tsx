@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
+import Pagination from '@/components/Pagination';
 import apiClient from '@/lib/api/client';
 
 interface YouTubeChannel {
@@ -27,18 +28,24 @@ export default function YouTubeChannelsPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [filter, setFilter] = useState<'all' | 'active' | 'inactive'>('all');
+    const [pagination, setPagination] = useState({
+        page: 1,
+        limit: 15,
+        total: 0,
+        totalPages: 0,
+    });
 
     useEffect(() => {
         fetchChannels();
-    }, [filter]);
+    }, [filter, pagination.page, pagination.limit]);
 
     const fetchChannels = async () => {
         try {
             setLoading(true);
             setError(null);
             const response = await apiClient.getYouTubeChannels({ 
-                page: 1, 
-                limit: 100,
+                page: pagination.page, 
+                limit: pagination.limit,
                 status: 'all' // Get all channels (active and inactive) for admin
             });
             // Filter by active status if needed
@@ -49,6 +56,13 @@ export default function YouTubeChannelsPage() {
                 filtered = filtered.filter(c => !c.is_active);
             }
             setChannels(filtered);
+            if (response.pagination) {
+                setPagination(prev => ({
+                    ...prev,
+                    total: response.pagination.total || 0,
+                    totalPages: response.pagination.totalPages || 0,
+                }));
+            }
         } catch (err: any) {
             console.error('Error fetching YouTube channels:', err);
             setError(err.message || 'Failed to fetch YouTube channels');
@@ -274,7 +288,17 @@ export default function YouTubeChannelsPage() {
                                     ))}
                                 </tbody>
                             </table>
-                        </div>
+                            </div>
+                            {pagination.totalPages > 0 && (
+                                <Pagination
+                                    currentPage={pagination.page}
+                                    totalPages={pagination.totalPages}
+                                    totalItems={pagination.total}
+                                    itemsPerPage={pagination.limit}
+                                    onPageChange={(page) => setPagination(prev => ({ ...prev, page }))}
+                                    onItemsPerPageChange={(limit) => setPagination(prev => ({ ...prev, limit, page: 1 }))}
+                                />
+                            )}
                         )}
                     </div>
                 </main>
