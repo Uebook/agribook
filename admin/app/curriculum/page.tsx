@@ -205,7 +205,6 @@ export default function CurriculumPage() {
                       ))}
                     </tbody>
                   </table>
-                  </div>
                   {pagination.totalPages > 0 && (
                     <Pagination
                       currentPage={pagination.page}
