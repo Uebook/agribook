@@ -170,11 +170,11 @@ class ApiClient {
   }
 
   // Audio Books API
-  async getAudioBooks(params?: { page?: number; limit?: number }) {
+  async getAudioBooks(params?: { page?: number; limit?: number; status?: string }) {
     const queryParams = new URLSearchParams();
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined) {
+        if (value !== undefined && value !== null) {
           queryParams.append(key, value.toString());
         }
       });
