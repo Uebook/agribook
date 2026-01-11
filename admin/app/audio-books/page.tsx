@@ -206,7 +206,6 @@ export default function AudioBooksPage() {
                       ))}
                     </tbody>
                   </table>
-                  </div>
                   {pagination.totalPages > 0 && (
                     <Pagination
                       currentPage={pagination.page}
