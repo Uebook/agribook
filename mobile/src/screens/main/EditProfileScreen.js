@@ -35,6 +35,45 @@ const EditProfileScreen = ({ navigation, route }) => {
   const [avatarFile, setAvatarFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [supabaseStatus, setSupabaseStatus] = useState({
+    connected: false,
+    checking: true,
+  });
+
+  // Check Supabase connection status
+  useEffect(() => {
+    const checkSupabase = async () => {
+      try {
+        if (supabase) {
+          // Try to access storage to verify connection
+          const hasStorage = !!supabase.storage;
+          setSupabaseStatus({
+            connected: hasStorage,
+            checking: false,
+          });
+          console.log('📊 Supabase Status Check:', {
+            connected: hasStorage,
+            hasClient: !!supabase,
+            hasStorage: hasStorage,
+          });
+        } else {
+          setSupabaseStatus({
+            connected: false,
+            checking: false,
+          });
+          console.log('📊 Supabase Status: NOT CONNECTED (supabase is null)');
+        }
+      } catch (error) {
+        console.error('❌ Error checking Supabase status:', error);
+        setSupabaseStatus({
+          connected: false,
+          checking: false,
+        });
+      }
+    };
+
+    checkSupabase();
+  }, []);
   // useEffect(() => {
   //   fetch('https://admin-orcin-omega.vercel.app')
   //     .then(() => console.log('✅ Network OK'))
