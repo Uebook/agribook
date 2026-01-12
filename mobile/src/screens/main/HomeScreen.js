@@ -3,7 +3,7 @@
  * Features: Personalized recommendations, Recently opened, Continue Reading, Trending books
  */
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import {
   Image,
   ActivityIndicator,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import Colors from '../../../color';
 // Removed dummy data imports - using API only
 import { useAuth } from '../../context/AuthContext';
@@ -38,67 +39,75 @@ const HomeScreen = ({ navigation }) => {
   const safeUserData = userData || {};
 
   // Fetch books, audio books, notifications, and user data from API
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        
-        // For authors: fetch only their own books (all statuses)
-        // For readers: fetch all published books
-        const params = isAuthor && userId 
-          ? { author: userId, status: 'all', limit: 100 } // Get all books by this author (all statuses) - using 'author' to match API
-          : { status: 'published', limit: 50 };
-        
-        // Fetch books and audio books (critical data)
-        const [booksResult, audioBooksResult] = await Promise.all([
-          apiClient.getBooks(params).catch(err => {
-            console.error('Error fetching books:', err);
-            return { books: [] };
-          }),
-          apiClient.getAudioBooks(isAuthor && userId ? { author: userId, limit: 100 } : { limit: 50 }).catch(err => {
-            console.error('Error fetching audio books:', err);
-            return { audioBooks: [] };
-          }),
-        ]);
-        
-        setAllBooks(booksResult.books || []);
-        setAllAudioBooks(audioBooksResult.audioBooks || []);
-        
-        // Fetch notifications and user data (non-critical, handle errors gracefully)
-        if (userId) {
-          try {
-            const notificationsResult = await apiClient.getNotifications(userId, 'all');
-            if (notificationsResult) {
-              setNotifications(notificationsResult.notifications || []);
-            }
-          } catch (err) {
-            console.warn('Error fetching notifications:', err);
-            setNotifications([]);
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+      
+      // For authors: fetch only their own books (all statuses)
+      // For readers: fetch all published books
+      const params = isAuthor && userId 
+        ? { author: userId, status: 'all', limit: 100 } // Get all books by this author (all statuses) - using 'author' to match API
+        : { status: 'published', limit: 50 };
+      
+      // Fetch books and audio books (critical data)
+      const [booksResult, audioBooksResult] = await Promise.all([
+        apiClient.getBooks(params).catch(err => {
+          console.error('Error fetching books:', err);
+          return { books: [] };
+        }),
+        apiClient.getAudioBooks(isAuthor && userId ? { author: userId, limit: 100 } : { limit: 50 }).catch(err => {
+          console.error('Error fetching audio books:', err);
+          return { audioBooks: [] };
+        }),
+      ]);
+      
+      setAllBooks(booksResult.books || []);
+      setAllAudioBooks(audioBooksResult.audioBooks || []);
+      
+      // Fetch notifications and user data (non-critical, handle errors gracefully)
+      if (userId) {
+        try {
+          const notificationsResult = await apiClient.getNotifications(userId, 'all');
+          if (notificationsResult) {
+            setNotifications(notificationsResult.notifications || []);
           }
-          
-          try {
-            const userResult = await apiClient.getUser(userId);
-            if (userResult && userResult.user) {
-              // Calculate or get user rating (you might need to add rating to user model)
-              setUserRating(userResult.user.rating || 0);
-            }
-          } catch (err) {
-            console.warn('Error fetching user data:', err);
-            // User data is not critical, continue without it
-            setUserRating(0);
-          }
+        } catch (err) {
+          console.warn('Error fetching notifications:', err);
+          setNotifications([]);
         }
-      } catch (error) {
-        console.error('Error fetching data:', error);
-        setAllBooks([]);
-        setAllAudioBooks([]);
-      } finally {
-        setLoading(false);
+        
+        try {
+          const userResult = await apiClient.getUser(userId);
+          if (userResult && userResult.user) {
+            // Calculate or get user rating (you might need to add rating to user model)
+            setUserRating(userResult.user.rating || 0);
+          }
+        } catch (err) {
+          console.warn('Error fetching user data:', err);
+          // User data is not critical, continue without it
+          setUserRating(0);
+        }
       }
-    };
-    
-    fetchData();
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      setAllBooks([]);
+      setAllAudioBooks([]);
+    } finally {
+      setLoading(false);
+    }
   }, [isAuthor, userId]);
+
+  // Fetch data on mount
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Refresh data when screen comes into focus (e.g., after uploading a book)
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
+    }, [fetchData])
+  );
 
   // For authors: show only their own books, for readers: show normal content
   const myBooks = useMemo(() => {

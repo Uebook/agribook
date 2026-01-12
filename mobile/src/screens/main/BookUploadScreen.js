@@ -16,6 +16,7 @@ import {
   Image,
   Platform,
   InteractionManager,
+  Modal,
 } from 'react-native';
 import DocumentPicker from 'react-native-document-picker';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
@@ -125,6 +126,7 @@ const BookUploadScreen = ({ navigation }) => {
   const [pdfFile, setPdfFile] = useState(null);
   const [audioFile, setAudioFile] = useState(null);
   const [bookType, setBookType] = useState('book'); // 'book' or 'audio'
+  const [showPreview, setShowPreview] = useState(false); // Preview modal state
   const { categories: categoriesList, loading: loadingCategories } = useCategories();
   const [formData, setFormData] = useState({
     title: '',
@@ -144,6 +146,11 @@ const BookUploadScreen = ({ navigation }) => {
       isMountedRef.current = false;
     };
   }, []);
+
+  // Debug: Log when showPreview changes
+  useEffect(() => {
+    console.log('📋 showPreview state changed to:', showPreview);
+  }, [showPreview]);
 
   const handleInputChange = useCallback((field, value) => {
     setFormData((prev) => ({
@@ -436,150 +443,121 @@ const BookUploadScreen = ({ navigation }) => {
 
     try {
       if (bookType === 'book') {
-        // Calculate total steps - Both PDF and cover image are optional
-        let pdfUploadStep = pdfFile ? 1 : 0; // PDF is optional
-        let imageUploadStep = (coverImageFile && coverImageFile.uri && !coverImageFile.uri.startsWith('http')) ? 1 : 0; // Only upload if new image selected
-        let totalSteps = pdfUploadStep + imageUploadStep + 1; // Files + Create record
-        // Ensure at least 1 step for book creation
-        if (totalSteps === 0) totalSteps = 1;
-        let currentStep = 0;
-
-        let pdfUrl = null;
-        let coverImageUrl = coverImageUri && coverImageUri.startsWith('http') ? coverImageUri : null; // Use existing URL if it's already uploaded
-
-        // Step 1: Upload cover image if a new one was selected (same pattern as profile screen)
+        // Single API call with FormData (like profile upload)
+        setUploadProgress(10);
+        const bookPrice = parseFloat(formData.price) || 0;
+        
+        // Create FormData with metadata and files (both optional)
+        const uploadFormData = new FormData();
+        
+        // Add metadata
+        uploadFormData.append('title', formData.title);
+        uploadFormData.append('author_id', userId);
+        uploadFormData.append('summary', formData.description);
+        uploadFormData.append('price', bookPrice.toString());
+        uploadFormData.append('original_price', bookPrice.toString());
+        if (formData.pages) uploadFormData.append('pages', formData.pages);
+        uploadFormData.append('language', formData.language);
+        uploadFormData.append('category_id', formData.category);
+        if (formData.isbn) uploadFormData.append('isbn', formData.isbn);
+        uploadFormData.append('is_free', 'false');
+        uploadFormData.append('published_date', new Date().toISOString());
+        
+        // Add cover image file if new one selected (optional)
         if (coverImageFile && coverImageFile.uri && !coverImageFile.uri.startsWith('http')) {
           setUploadingCoverImage(true);
-          setUploadProgress(Math.round((currentStep / totalSteps) * 100));
-          try {
-            const uploadResult = await apiClient.uploadFile(
-              coverImageFile,
-              'books',
-              'covers'
-              // Removed userId parameter to match profile upload pattern
-            );
-            // Safely extract URL using bracket notation and 'in' operator
-            if (uploadResult && typeof uploadResult === 'object' && !(uploadResult instanceof Error)) {
-              const uploadedUrl = ('url' in uploadResult && uploadResult['url']) 
-                ? uploadResult['url'] 
-                : null;
-              if (uploadedUrl) {
-                coverImageUrl = uploadedUrl;
-                setCoverImageUri(uploadedUrl);
-                console.log('✅ Cover image uploaded:', coverImageUrl);
-              }
-            }
-          } catch (uploadError) {
-            console.error('Error uploading cover image:', uploadError);
-            console.error('Upload error details:', {
-              message: uploadError?.message,
-              name: uploadError?.name,
-              stack: uploadError?.stack,
-            });
-            // Cover image is optional - don't show error alert, just log and continue
-            // The book will be created without cover image
-            console.warn('⚠️ Cover image upload failed (optional):', uploadError?.message || 'Unknown error');
-            coverImageUrl = null;
-          } finally {
-            setUploadingCoverImage(false);
-            currentStep++;
-            setUploadProgress(Math.round((currentStep / totalSteps) * 100));
-          }
+          uploadFormData.append('coverImage', {
+            uri: coverImageFile.uri,
+            type: coverImageFile.type || 'image/jpeg',
+            name: coverImageFile.name || `cover_${Date.now()}.jpg`,
+          });
+          console.log('📤 Adding cover image to FormData...');
         }
-
-        // Step 2: Upload PDF file (OPTIONAL)
+        
+        // Add PDF file if provided (optional)
         if (pdfFile) {
-          setUploadProgress(Math.round((currentStep / totalSteps) * 100));
-          try {
-            const fileToUpload = pdfFile.file || {
-              uri: pdfFile.uri,
-              type: pdfFile.type || 'application/pdf',
-              name: pdfFile.name || 'book.pdf',
-            };
-            
-            // uploadFile will return { success: true, url: string } or throw Error
-            const pdfResult = await apiClient.uploadFile(fileToUpload, 'books', 'pdfs');
-            // Removed userId parameter to match profile upload pattern
-            console.log('✅ PDF upload successful:', pdfResult);
-            
-            // Extract URL - it's guaranteed to exist if we get here
-            pdfUrl = pdfResult.url;
-            
-            if (!pdfUrl) {
-              throw new Error('Upload succeeded but no URL returned');
-            }
-            
-            currentStep++;
-            setUploadProgress(Math.round((currentStep / totalSteps) * 100));
-          } catch (uploadError) {
-            console.warn('⚠️ PDF upload failed (optional):', uploadError);
-            // Don't stop the upload process if PDF fails - it's optional
-            // Just log the warning and continue
-            pdfUrl = null;
+          const fileToUpload = pdfFile.file || {
+            uri: pdfFile.uri,
+            type: pdfFile.type || 'application/pdf',
+            name: pdfFile.name || 'book.pdf',
+          };
+          uploadFormData.append('pdfFile', {
+            uri: fileToUpload.uri,
+            type: fileToUpload.type || 'application/pdf',
+            name: fileToUpload.name || 'book.pdf',
+          });
+          console.log('📤 Adding PDF to FormData...');
+        }
+        
+        setUploadProgress(30);
+        
+        // Single API call - uploads files and creates book record
+        try {
+          setUploadProgress(60);
+          
+          // Log what we're sending
+          console.log('📤 Sending book upload request...');
+          console.log('📤 FormData has coverImage:', !!coverImageFile);
+          console.log('📤 FormData has pdfFile:', !!pdfFile);
+          console.log('📤 FormData metadata:', {
+            title: formData.title,
+            author_id: userId,
+            category_id: formData.category,
+          });
+          
+          const result = await apiClient.createBook(null, uploadFormData);
+          console.log('✅ Book created successfully with single API call:', result);
+          setUploadProgress(100);
+          setUploadingCoverImage(false);
+          
+          // Update cover image URI if it was uploaded
+          if (result.book?.cover_image_url) {
+            setCoverImageUri(result.book.cover_image_url);
           }
-        }
 
-        // Step 3: Create book record (Both PDF and cover image are optional)
-        setUploadProgress(Math.round((currentStep / totalSteps) * 100));
-        const bookPrice = parseFloat(formData.price) || 0;
-        const bookData = {
-          title: formData.title,
-          author_id: userId,
-          summary: formData.description,
-          price: bookPrice,
-          original_price: bookPrice, // Set original_price same as price
-          pages: formData.pages ? parseInt(formData.pages) : null,
-          language: formData.language,
-          category_id: formData.category,
-          isbn: formData.isbn || null,
-          is_free: false,
-          pdf_url: pdfUrl || null, // Optional
-          cover_image_url: coverImageUrl || null, // Optional - single cover image
-          cover_images: coverImageUrl ? [coverImageUrl] : [], // Optional - array with single image
-          published_date: new Date().toISOString(), // Set published date to current date
-        };
-        await apiClient.createBook(bookData);
-        currentStep++;
-        setUploadProgress(100);
+          // Build success message
+          let successMessage = 'Book uploaded successfully!';
+          const missingComponents = [];
+          if (!result.book?.cover_image_url && coverImageFile) {
+            missingComponents.push('cover image');
+          }
+          if (!result.book?.pdf_url && pdfFile) {
+            missingComponents.push('PDF');
+          }
+          if (missingComponents.length > 0) {
+            successMessage += `\n\nNote: ${missingComponents.join(' and ')} could not be uploaded due to network issues, but the book was created successfully.`;
+          }
 
-        // Build success message with info about optional components
-        let successMessage = 'Book uploaded successfully!';
-        const missingComponents = [];
-        if (!coverImageUrl && coverImageFile) {
-          missingComponents.push('cover image');
-        }
-        if (!pdfUrl && pdfFile) {
-          missingComponents.push('PDF');
-        }
-        if (missingComponents.length > 0) {
-          successMessage += `\n\nNote: ${missingComponents.join(' and ')} could not be uploaded due to network issues, but the book was created successfully.`;
-        }
-
-        Alert.alert(
-          'Success',
-          successMessage,
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                setFormData({
-                  title: '',
-                  description: '',
-                  category: '',
-                  price: '',
-                  language: 'English',
-                  pages: '',
-                  isbn: '',
-                });
-                setCoverImageUri(null);
-                setCoverImageFile(null);
-                setPdfFile(null);
-                setUploadProgress(0);
-                navigation.goBack();
+          Alert.alert(
+            'Success',
+            successMessage,
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  setFormData({
+                    title: '',
+                    description: '',
+                    category: '',
+                    price: '',
+                    language: 'English',
+                    pages: '',
+                    isbn: '',
+                  });
+                  setCoverImageUri(null);
+                  setCoverImageFile(null);
+                  setPdfFile(null);
+                  setUploadProgress(0);
+                  navigation.goBack();
+                },
               },
-            },
-          ]
-        );
+            ]
+          );
+        } catch (uploadError) {
+          console.error('Error creating book:', uploadError);
+          setUploadingCoverImage(false);
+          Alert.alert('Error', uploadError.message || 'Failed to upload book. Please try again.');
+        }
       } else if (bookType === 'audio') {
         // Calculate total steps for audio book (files are optional)
         let audioUploadStep = audioFile ? 1 : 0;
@@ -717,16 +695,28 @@ const BookUploadScreen = ({ navigation }) => {
   };
 
   const handleUpload = () => {
+    console.log('🔵 handleUpload called');
+    console.log('🔵 Form data:', {
+      title: formData.title,
+      description: formData.description,
+      category: formData.category,
+      price: formData.price,
+      bookType,
+    });
+    
     // Validate form
     if (!formData.title.trim()) {
+      console.log('❌ Validation failed: title missing');
       Alert.alert('Error', 'Please enter book title');
       return;
     }
     if (!formData.description.trim()) {
+      console.log('❌ Validation failed: description missing');
       Alert.alert('Error', 'Please enter book description');
       return;
     }
     if (!formData.category) {
+      console.log('❌ Validation failed: category missing');
       Alert.alert('Error', 'Please select a category');
       return;
     }
@@ -737,6 +727,7 @@ const BookUploadScreen = ({ navigation }) => {
       //   return;
       // }
       if (!formData.price || parseFloat(formData.price) < 0) {
+        console.log('❌ Validation failed: price invalid');
         Alert.alert('Error', 'Please enter a valid price');
         return;
       }
@@ -748,7 +739,21 @@ const BookUploadScreen = ({ navigation }) => {
       // }
     }
 
-    // Start upload
+    // Show preview instead of directly uploading
+    console.log('✅ All validations passed');
+    console.log('📋 Opening preview modal...');
+    console.log('📋 Current showPreview state:', showPreview);
+    setShowPreview(true);
+    console.log('📋 showPreview state set to: true');
+    
+    // Double check after a brief delay
+    setTimeout(() => {
+      console.log('📋 showPreview state after setState:', showPreview);
+    }, 100);
+  };
+
+  const handleConfirmUpload = () => {
+    setShowPreview(false);
     uploadBook();
   };
 
@@ -1139,6 +1144,121 @@ const BookUploadScreen = ({ navigation }) => {
       fontSize: 12 * fontSizeMultiplier,
       fontWeight: '600',
     },
+    // Preview Modal Styles
+    modalOverlay: {
+      flex: 1,
+      justifyContent: 'flex-end',
+    },
+    modalOverlayTouchable: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    },
+    modalContent: {
+      backgroundColor: themeColors.background.primary,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      maxHeight: '90%',
+      paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: 20,
+      borderBottomWidth: 1,
+      borderBottomColor: themeColors.border?.light || '#E0E0E0',
+    },
+    modalTitle: {
+      fontSize: 20 * fontSizeMultiplier,
+      fontWeight: 'bold',
+      color: themeColors.text.primary,
+    },
+    modalClose: {
+      fontSize: 24 * fontSizeMultiplier,
+      color: themeColors.text.secondary,
+      fontWeight: '300',
+    },
+    previewContent: {
+      padding: 20,
+      maxHeight: 500,
+    },
+    previewImageContainer: {
+      width: '100%',
+      marginBottom: 20,
+      alignItems: 'center',
+    },
+    previewImage: {
+      width: '100%',
+      height: 250,
+      borderRadius: 12,
+      backgroundColor: themeColors.background.tertiary,
+    },
+    previewSection: {
+      marginBottom: 16,
+      paddingBottom: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: themeColors.border?.light || '#E0E0E0',
+    },
+    previewLabel: {
+      fontSize: 12 * fontSizeMultiplier,
+      fontWeight: '600',
+      color: themeColors.text.secondary,
+      marginBottom: 6,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    previewValue: {
+      fontSize: 16 * fontSizeMultiplier,
+      color: themeColors.text.primary,
+      lineHeight: 24 * fontSizeMultiplier,
+    },
+    previewWarning: {
+      backgroundColor: themeColors.warning?.background || '#FFF3CD',
+      padding: 12,
+      borderRadius: 8,
+      marginTop: 12,
+    },
+    previewWarningText: {
+      fontSize: 14 * fontSizeMultiplier,
+      color: themeColors.warning?.text || '#856404',
+    },
+    modalActions: {
+      flexDirection: 'row',
+      padding: 20,
+      gap: 12,
+      borderTopWidth: 1,
+      borderTopColor: themeColors.border?.light || '#E0E0E0',
+    },
+    modalCancelButton: {
+      flex: 1,
+      backgroundColor: themeColors.background.secondary,
+      borderRadius: 8,
+      paddingVertical: 14,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: themeColors.border?.light || '#E0E0E0',
+    },
+    modalCancelButtonText: {
+      fontSize: 16 * fontSizeMultiplier,
+      fontWeight: '600',
+      color: themeColors.text.primary,
+    },
+    modalConfirmButton: {
+      flex: 2,
+      backgroundColor: themeColors.button.primary,
+      borderRadius: 8,
+      paddingVertical: 14,
+      alignItems: 'center',
+    },
+    modalConfirmButtonText: {
+      fontSize: 16 * fontSizeMultiplier,
+      fontWeight: 'bold',
+      color: themeColors.button.text,
+    },
   }), [themeColors, fontSizeMultiplier]);
 
   return (
@@ -1513,12 +1633,196 @@ const BookUploadScreen = ({ navigation }) => {
             )}
           </TouchableOpacity>
 
+          {/* Debug: Test Preview Button */}
+          {__DEV__ && (
+            <TouchableOpacity
+              style={[styles.submitButton, { backgroundColor: '#FF9800', marginTop: 10 }]}
+              onPress={() => {
+                console.log('🧪 TEST: Directly setting showPreview to true');
+                setShowPreview(true);
+              }}
+            >
+              <Text style={styles.submitButtonText}>🧪 TEST: Show Preview</Text>
+            </TouchableOpacity>
+          )}
+
           <Text style={styles.helpText}>
             * Required fields{'\n'}
             Your book will be reviewed before being published.
           </Text>
         </View>
       </ScrollView>
+
+      {/* Preview Modal */}
+      {console.log('🔴 RENDER: showPreview =', showPreview)}
+      <Modal
+        visible={showPreview}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => {
+          console.log('📋 Modal onRequestClose called');
+          setShowPreview(false);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={styles.modalOverlayTouchable}
+            activeOpacity={1}
+            onPress={() => {
+              console.log('📋 Overlay pressed, closing modal');
+              setShowPreview(false);
+            }}
+          />
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+            style={{ flex: 1, justifyContent: 'flex-end' }}
+          >
+            <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Book Preview</Text>
+              <TouchableOpacity onPress={() => setShowPreview(false)}>
+                <Text style={styles.modalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.previewContent} showsVerticalScrollIndicator={false}>
+              {/* Cover Image Preview */}
+              {coverImageUri && (
+                <View style={styles.previewImageContainer}>
+                  <Image
+                    source={{ uri: coverImageUri }}
+                    style={styles.previewImage}
+                    resizeMode="cover"
+                  />
+                </View>
+              )}
+
+              {/* Book Information */}
+              <View style={styles.previewSection}>
+                <Text style={styles.previewLabel}>Title</Text>
+                <Text style={styles.previewValue}>{formData.title}</Text>
+              </View>
+
+              <View style={styles.previewSection}>
+                <Text style={styles.previewLabel}>Description</Text>
+                <Text style={styles.previewValue}>{formData.description}</Text>
+              </View>
+
+              <View style={styles.previewSection}>
+                <Text style={styles.previewLabel}>Category</Text>
+                <Text style={styles.previewValue}>
+                  {categoriesList?.find(cat => cat.id === formData.category)?.name || 'Not selected'}
+                </Text>
+              </View>
+
+              {bookType === 'book' && (
+                <>
+                  <View style={styles.previewSection}>
+                    <Text style={styles.previewLabel}>Price</Text>
+                    <Text style={styles.previewValue}>
+                      ₹{parseFloat(formData.price) || 0}
+                    </Text>
+                  </View>
+
+                  {formData.pages && (
+                    <View style={styles.previewSection}>
+                      <Text style={styles.previewLabel}>Pages</Text>
+                      <Text style={styles.previewValue}>{formData.pages}</Text>
+                    </View>
+                  )}
+
+                  {formData.isbn && (
+                    <View style={styles.previewSection}>
+                      <Text style={styles.previewLabel}>ISBN</Text>
+                      <Text style={styles.previewValue}>{formData.isbn}</Text>
+                    </View>
+                  )}
+
+                  <View style={styles.previewSection}>
+                    <Text style={styles.previewLabel}>Language</Text>
+                    <Text style={styles.previewValue}>{formData.language}</Text>
+                  </View>
+
+                  {pdfFile && (
+                    <View style={styles.previewSection}>
+                      <Text style={styles.previewLabel}>PDF File</Text>
+                      <Text style={styles.previewValue}>
+                        {pdfFile.name || pdfFile.file?.name || 'book.pdf'}
+                      </Text>
+                    </View>
+                  )}
+                </>
+              )}
+
+              {bookType === 'audio' && (
+                <>
+                  <View style={styles.previewSection}>
+                    <Text style={styles.previewLabel}>Language</Text>
+                    <Text style={styles.previewValue}>{formData.language}</Text>
+                  </View>
+
+                  {audioFile && (
+                    <View style={styles.previewSection}>
+                      <Text style={styles.previewLabel}>Audio File</Text>
+                      <Text style={styles.previewValue}>
+                        {audioFile.name || 'audio.mp3'}
+                      </Text>
+                    </View>
+                  )}
+                </>
+              )}
+
+              {/* Missing Items Warning */}
+              {(!coverImageUri && !coverImageFile) && (
+                <View style={styles.previewWarning}>
+                  <Text style={styles.previewWarningText}>
+                    ⚠️ No cover image selected
+                  </Text>
+                </View>
+              )}
+
+              {bookType === 'book' && !pdfFile && (
+                <View style={styles.previewWarning}>
+                  <Text style={styles.previewWarningText}>
+                    ⚠️ No PDF file selected
+                  </Text>
+                </View>
+              )}
+
+              {bookType === 'audio' && !audioFile && (
+                <View style={styles.previewWarning}>
+                  <Text style={styles.previewWarningText}>
+                    ⚠️ No audio file selected
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
+
+            {/* Action Buttons */}
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => setShowPreview(false)}
+              >
+                <Text style={styles.modalCancelButtonText}>Edit</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalConfirmButton}
+                onPress={handleConfirmUpload}
+                disabled={isUploading}
+              >
+                {isUploading ? (
+                  <ActivityIndicator color={themeColors.text.light} />
+                ) : (
+                  <Text style={styles.modalConfirmButtonText}>Confirm & Upload</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </View>
   );
 };

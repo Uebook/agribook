@@ -1,6 +1,220 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/client';
 
+// Helper function to upload file to Supabase Storage (handles React Native files)
+// Uses the same robust file handling as /api/upload
+async function uploadFileToStorage(
+  supabase: any,
+  file: File | Blob | any,
+  bucket: string,
+  folder: string,
+  authorId: string | null,
+  fileName?: string,
+  fileType?: string
+): Promise<string> {
+  // Read file as Buffer (handle React Native format)
+  let fileBuffer: Buffer | undefined;
+  let finalFileName: string = fileName || 'file';
+  let contentType: string = fileType || 'application/octet-stream';
+  
+  try {
+    const fileObj = file as any;
+    
+    console.log('📄 Processing file for upload:', {
+      isFile: fileObj instanceof File,
+      isBlob: fileObj instanceof Blob,
+      objectType: typeof fileObj,
+      constructor: fileObj?.constructor?.name,
+      hasArrayBuffer: typeof fileObj?.arrayBuffer === 'function',
+      hasStream: typeof fileObj?.stream === 'function',
+      keys: fileObj ? Object.keys(fileObj) : [],
+      size: (fileObj as any)?.size,
+      name: (fileObj as any)?.name,
+      mimeType: (fileObj as any)?.type,
+    });
+    
+    // Method 1: File object (web) - This should work for React Native too
+    if (fileObj instanceof File) {
+      console.log('Reading as File object');
+      try {
+        const arrayBuffer = await fileObj.arrayBuffer();
+        fileBuffer = Buffer.from(arrayBuffer);
+        finalFileName = fileObj.name || fileName || 'file';
+        contentType = fileObj.type || fileType || 'application/octet-stream';
+        console.log('✅ File read successfully:', { 
+          size: fileBuffer.length, 
+          finalFileName, 
+          contentType,
+        });
+      } catch (fileReadError: any) {
+        console.error('❌ Error reading File object:', fileReadError);
+        throw new Error(`Failed to read File object: ${fileReadError.message}`);
+      }
+    }
+    // Method 2: Blob object
+    else if (fileObj instanceof Blob) {
+      console.log('Reading as Blob object');
+      const arrayBuffer = await fileObj.arrayBuffer();
+      fileBuffer = Buffer.from(arrayBuffer);
+      finalFileName = fileName || 'file';
+      contentType = fileObj.type || fileType || 'application/octet-stream';
+      console.log('✅ File read successfully:', { size: fileBuffer.length, finalFileName, contentType });
+    }
+    // Method 3: Has arrayBuffer method
+    else if (typeof fileObj?.arrayBuffer === 'function') {
+      console.log('Reading via arrayBuffer() method');
+      const arrayBuffer = await fileObj.arrayBuffer();
+      fileBuffer = Buffer.from(arrayBuffer);
+      finalFileName = fileName || 'file';
+      contentType = fileType || 'application/octet-stream';
+      console.log('✅ File read successfully:', { size: fileBuffer.length, finalFileName, contentType });
+    }
+    // Method 4: ReadableStream
+    else if (fileObj && typeof fileObj.stream === 'function') {
+      console.log('Reading as ReadableStream');
+      const stream = fileObj.stream();
+      const chunks: Uint8Array[] = [];
+      const reader = stream.getReader();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (value) chunks.push(value);
+        }
+        // Convert chunks to single buffer
+        const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+        const combined = new Uint8Array(totalLength);
+        let offset = 0;
+        for (const chunk of chunks) {
+          combined.set(chunk, offset);
+          offset += chunk.length;
+        }
+        fileBuffer = Buffer.from(combined.buffer);
+        finalFileName = fileName || 'file';
+        contentType = fileType || 'application/octet-stream';
+        console.log('✅ File read successfully:', { size: fileBuffer.length, finalFileName, contentType });
+      } finally {
+        reader.releaseLock();
+      }
+    }
+    // Method 5: Try as Buffer directly (Node.js)
+    else if (Buffer.isBuffer(fileObj)) {
+      console.log('Reading as Buffer');
+      fileBuffer = fileObj;
+      finalFileName = fileName || 'file';
+      contentType = fileType || 'application/octet-stream';
+      console.log('✅ File read successfully:', { size: fileBuffer.length, finalFileName, contentType });
+    }
+    // Method 6: Try as Uint8Array or Array-like
+    else if (fileObj instanceof Uint8Array || Array.isArray(fileObj)) {
+      console.log('Reading as Uint8Array or Array');
+      fileBuffer = Buffer.from(fileObj);
+      finalFileName = fileName || 'file';
+      contentType = fileType || 'application/octet-stream';
+      console.log('✅ File read successfully:', { size: fileBuffer.length, finalFileName, contentType });
+    }
+    // Method 7: React Native FormData - file might be sent as a special object
+    else if (fileObj && typeof fileObj === 'object' && !Array.isArray(fileObj)) {
+      console.log('Trying React Native file format...');
+      let bufferFound = false;
+      
+      // Try: Check if it has a _data or data property
+      const dataProp = (fileObj as any)._data || (fileObj as any).data;
+      if (dataProp) {
+        console.log('Found _data or data property, trying to read...');
+        if (Buffer.isBuffer(dataProp)) {
+          fileBuffer = dataProp;
+          finalFileName = fileName || 'file';
+          contentType = fileType || 'application/octet-stream';
+          bufferFound = true;
+          console.log('✅ File read from _data/data property:', { size: fileBuffer.length });
+        } else if (dataProp instanceof Uint8Array) {
+          fileBuffer = Buffer.from(dataProp);
+          finalFileName = fileName || 'file';
+          contentType = fileType || 'application/octet-stream';
+          bufferFound = true;
+          console.log('✅ File read from _data/data as Uint8Array:', { size: fileBuffer.length });
+        } else if (typeof dataProp === 'string') {
+          // Might be base64 encoded
+          if (dataProp.startsWith('data:')) {
+            const base64Data = dataProp.split(',')[1];
+            fileBuffer = Buffer.from(base64Data, 'base64');
+            finalFileName = fileName || 'file';
+            contentType = fileType || 'application/octet-stream';
+            bufferFound = true;
+            console.log('✅ File read from _data/data as base64:', { size: fileBuffer.length });
+          }
+        }
+      }
+      
+      if (!bufferFound) {
+        console.error('❌ Unsupported React Native file format:', {
+          type: typeof fileObj,
+          constructor: fileObj?.constructor?.name,
+          keys: Object.keys(fileObj),
+        });
+        throw new Error('Unsupported file format: Could not read React Native file object');
+      }
+    }
+    // Method 8: Fallback - unsupported format
+    else {
+      console.error('❌ Unsupported file format:', {
+        type: typeof fileObj,
+        constructor: fileObj?.constructor?.name,
+        keys: fileObj ? Object.keys(fileObj) : [],
+      });
+      throw new Error('Unsupported file format');
+    }
+    
+    if (!fileBuffer) {
+      throw new Error('Failed to read file: No buffer created');
+    }
+  } catch (readError: any) {
+    console.error('❌ Error reading file:', readError);
+    throw new Error(`Failed to read file: ${readError.message}`);
+  }
+  
+  // Generate unique file name with author_id if provided
+  const timestamp = Date.now();
+  let uniqueFileName: string;
+  if (folder && authorId) {
+    uniqueFileName = `${folder}/${authorId}/${timestamp}-${finalFileName}`;
+  } else if (folder) {
+    uniqueFileName = `${folder}/${timestamp}-${finalFileName}`;
+  } else if (authorId) {
+    uniqueFileName = `${authorId}/${timestamp}-${finalFileName}`;
+  } else {
+    uniqueFileName = `${timestamp}-${finalFileName}`;
+  }
+  
+  // Upload to Supabase Storage
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .upload(uniqueFileName, fileBuffer, {
+      contentType: contentType,
+      cacheControl: '3600',
+      upsert: false,
+    });
+  
+  if (error) {
+    console.error('Supabase upload error:', error);
+    throw new Error(`Failed to upload file: ${error.message}`);
+  }
+  
+  // Get public URL
+  const { data: urlData } = supabase.storage
+    .from(bucket)
+    .getPublicUrl(uniqueFileName);
+  
+  // Also generate signed URL as fallback
+  const { data: signedUrlData } = await supabase.storage
+    .from(bucket)
+    .createSignedUrl(uniqueFileName, 31536000); // 1 year expiry
+  
+  // Use signed URL if available, otherwise use public URL
+  return signedUrlData?.signedUrl || urlData.publicUrl;
+}
+
 // CORS headers helper
 function getCorsHeaders() {
   return {
@@ -197,12 +411,206 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/books - Create new book
+// POST /api/books - Create new book (supports both FormData with files and JSON)
 export async function POST(request: NextRequest) {
   try {
     const supabase = createServerClient();
-    const body = await request.json();
+    const contentType = request.headers.get('content-type') || '';
+    
+    // Check if request is FormData (multipart) or JSON
+    const isFormData = contentType.includes('multipart') || contentType.includes('form-data');
+    
+    let bookData: any = {};
+    let coverImageFile: File | null = null;
+    let pdfFile: File | null = null;
+    let coverImageUrl: string | null = null;
+    let pdfUrl: string | null = null;
 
+    if (isFormData) {
+      // Handle FormData with files (single API call)
+      console.log('📦 Book upload: FormData detected, processing files and metadata...');
+      console.log('📦 Request details:', {
+        contentType,
+        method: request.method,
+        url: request.url,
+        hasContentType: !!contentType,
+      });
+      
+      try {
+        const formData = await request.formData();
+        
+        // Log all FormData keys
+        const formDataKeys = Array.from(formData.keys());
+        console.log('📦 FormData keys:', formDataKeys);
+        
+        // Extract files
+        coverImageFile = formData.get('coverImage') as File | null;
+        pdfFile = formData.get('pdfFile') as File | null;
+        
+        // Log file details
+        if (coverImageFile) {
+          const coverFileAny = coverImageFile as any;
+          console.log('📸 Cover image file details:', {
+            isFile: coverImageFile instanceof File,
+            isBlob: coverImageFile instanceof Blob,
+            type: typeof coverImageFile,
+            constructor: coverImageFile?.constructor?.name,
+            name: coverFileAny?.name,
+            size: coverFileAny?.size,
+            type: coverFileAny?.type,
+            hasArrayBuffer: typeof coverFileAny?.arrayBuffer === 'function',
+            keys: Object.keys(coverFileAny || {}),
+          });
+        }
+        
+        if (pdfFile) {
+          const pdfFileAny = pdfFile as any;
+          console.log('📄 PDF file details:', {
+            isFile: pdfFile instanceof File,
+            isBlob: pdfFile instanceof Blob,
+            type: typeof pdfFile,
+            constructor: pdfFile?.constructor?.name,
+            name: pdfFileAny?.name,
+            size: pdfFileAny?.size,
+            type: pdfFileAny?.type,
+            hasArrayBuffer: typeof pdfFileAny?.arrayBuffer === 'function',
+            keys: Object.keys(pdfFileAny || {}),
+          });
+        }
+        
+        // Extract metadata from FormData
+        bookData = {
+          title: formData.get('title') as string,
+          author_id: formData.get('author_id') as string,
+          summary: formData.get('summary') as string,
+          price: formData.get('price') ? parseFloat(formData.get('price') as string) : 0,
+          original_price: formData.get('original_price') ? parseFloat(formData.get('original_price') as string) : null,
+          pages: formData.get('pages') ? parseInt(formData.get('pages') as string) : null,
+          language: (formData.get('language') as string) || 'English',
+          category_id: formData.get('category_id') as string,
+          isbn: formData.get('isbn') as string || null,
+          is_free: formData.get('is_free') === 'true' || false,
+          published_date: (formData.get('published_date') as string) || new Date().toISOString(),
+        };
+        
+        console.log('📦 FormData extracted:', {
+          hasCoverImage: !!coverImageFile,
+          hasPdfFile: !!pdfFile,
+          title: bookData.title,
+          author_id: bookData.author_id,
+          category_id: bookData.category_id,
+        });
+      } catch (formDataError: any) {
+        console.error('❌ Error parsing FormData:', formDataError);
+        const errorResponse = NextResponse.json(
+          { 
+            error: 'Failed to parse FormData', 
+            details: formDataError.message 
+          },
+          { status: 400 }
+        );
+        Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+          errorResponse.headers.set(key, value);
+        });
+        return errorResponse;
+      }
+      
+      // Upload cover image if provided (optional)
+      if (coverImageFile && coverImageFile !== null && coverImageFile !== 'null' && coverImageFile !== 'undefined') {
+        try {
+          console.log('📤 Uploading cover image...');
+          const coverImageFileName = (coverImageFile as any)?.name || `cover_${Date.now()}.jpg`;
+          const coverImageFileType = (coverImageFile as any)?.type || 'image/jpeg';
+          const coverImageUrlResult = await uploadFileToStorage(
+            supabase,
+            coverImageFile,
+            'books',
+            'covers',
+            bookData.author_id,
+            coverImageFileName,
+            coverImageFileType
+          );
+          coverImageUrl = coverImageUrlResult;
+          console.log('✅ Cover image uploaded:', coverImageUrl);
+        } catch (uploadError: any) {
+          console.error('⚠️ Cover image upload failed (optional):', uploadError.message);
+          // Continue without cover image
+          coverImageUrl = null;
+        }
+      }
+      
+      // Upload PDF if provided (optional)
+      if (pdfFile && pdfFile !== null && pdfFile !== 'null' && pdfFile !== 'undefined') {
+        try {
+          console.log('📤 Uploading PDF...');
+          const pdfFileName = (pdfFile as any)?.name || `book_${Date.now()}.pdf`;
+          const pdfFileType = (pdfFile as any)?.type || 'application/pdf';
+          const pdfUrlResult = await uploadFileToStorage(
+            supabase,
+            pdfFile,
+            'books',
+            'pdfs',
+            bookData.author_id,
+            pdfFileName,
+            pdfFileType
+          );
+          pdfUrl = pdfUrlResult;
+          console.log('✅ PDF uploaded:', pdfUrl);
+        } catch (uploadError: any) {
+          console.error('⚠️ PDF upload failed (optional):', uploadError.message);
+          // Continue without PDF
+          pdfUrl = null;
+        }
+      }
+      
+      // Add uploaded URLs to bookData
+      bookData.cover_image_url = coverImageUrl;
+      bookData.cover_images = coverImageUrl ? [coverImageUrl] : [];
+      bookData.pdf_url = pdfUrl;
+    } else {
+      // Handle JSON request (backward compatible)
+      const body = await request.json();
+
+      const {
+        title,
+        author_id,
+        summary,
+        price,
+        original_price,
+        pages,
+        language,
+        category_id,
+        isbn,
+        is_free,
+        pdf_url,
+        cover_image_url,
+        cover_images,
+        published_date,
+      } = body;
+      
+      bookData = {
+        title,
+        author_id,
+        summary,
+        price,
+        original_price,
+        pages,
+        language,
+        category_id,
+        isbn,
+        is_free,
+        pdf_url,
+        cover_image_url,
+        cover_images,
+        published_date,
+      };
+      
+      // Use existing URLs if provided
+      coverImageUrl = cover_image_url || null;
+      pdfUrl = pdf_url || null;
+    }
+
+    // Extract values from bookData
     const {
       title,
       author_id,
@@ -214,15 +622,20 @@ export async function POST(request: NextRequest) {
       category_id,
       isbn,
       is_free,
-      pdf_url,
-      cover_image_url,
+      pdf_url: bookPdfUrl,
+      cover_image_url: bookCoverImageUrl,
       cover_images,
       published_date,
-    } = body;
+    } = bookData;
+
+    // Use uploaded URLs if available, otherwise use bookData URLs
+    const finalCoverImageUrl = coverImageUrl || bookCoverImageUrl || null;
+    const finalPdfUrl = pdfUrl || bookPdfUrl || null;
 
     // Log image data for debugging
     console.log('📸 Image data received:', {
-      cover_image_url: cover_image_url ? `${cover_image_url.substring(0, 50)}...` : null,
+      cover_image_url: finalCoverImageUrl ? `${finalCoverImageUrl.substring(0, 50)}...` : null,
+      pdf_url: finalPdfUrl ? `${finalPdfUrl.substring(0, 50)}...` : null,
       cover_images_count: Array.isArray(cover_images) ? cover_images.length : (cover_images ? 1 : 0),
       cover_images_type: typeof cover_images,
       cover_images_is_array: Array.isArray(cover_images),
@@ -346,17 +759,23 @@ export async function POST(request: NextRequest) {
         processedCoverImages = [cover_images];
       }
     }
+    
+    // If we have a finalCoverImageUrl, add it to the array if not already present
+    if (finalCoverImageUrl && !processedCoverImages.includes(finalCoverImageUrl)) {
+      processedCoverImages = [finalCoverImageUrl, ...processedCoverImages];
+    }
 
-    // Use first cover image as cover_image_url if not provided
-    const finalCoverImageUrl = cover_image_url || (processedCoverImages.length > 0 ? processedCoverImages[0] : null);
+    // Use uploaded/provided cover image URL, or first from array, or null
+    const finalCoverImageUrlForDb = finalCoverImageUrl || (processedCoverImages.length > 0 ? processedCoverImages[0] : null);
 
     console.log('📸 Processed image data:', {
-      cover_image_url: finalCoverImageUrl ? `${finalCoverImageUrl.substring(0, 50)}...` : null,
+      cover_image_url: finalCoverImageUrlForDb ? `${finalCoverImageUrlForDb.substring(0, 50)}...` : null,
+      pdf_url: finalPdfUrl ? `${finalPdfUrl.substring(0, 50)}...` : null,
       cover_images_count: processedCoverImages.length,
       cover_images_preview: processedCoverImages.slice(0, 3).map((url: string) => url ? `${url.substring(0, 30)}...` : null),
     });
 
-    // Insert book
+    // Insert book (PDF is optional - can be null)
     const { data: book, error } = await supabase
       .from('books')
       .insert({
@@ -370,9 +789,9 @@ export async function POST(request: NextRequest) {
         category_id,
         isbn,
         is_free: is_free || false,
-        pdf_url,
-        cover_image_url: finalCoverImageUrl,
-        cover_images: processedCoverImages,
+        pdf_url: finalPdfUrl, // Optional - can be null
+        cover_image_url: finalCoverImageUrlForDb, // Optional - can be null
+        cover_images: processedCoverImages, // Optional - can be empty array
         published_date: published_date || new Date().toISOString(),
         status: 'pending',
       })

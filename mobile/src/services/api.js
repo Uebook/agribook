@@ -121,11 +121,116 @@ class ApiClient {
     return this.request(`/api/books/${id}/download`);
   }
 
-  async createBook(data) {
-    return this.request('/api/books', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+  // Create book with FormData (files + metadata) or JSON (metadata only)
+  async createBook(data, formData = null) {
+    if (formData) {
+      // Use FormData for single API call with files
+      const url = `${this.baseUrl}/api/books`;
+      console.log('📤 Creating book with FormData (single API call)...');
+      console.log('📤 Request URL:', url);
+      console.log('📤 FormData keys:', formData._parts ? formData._parts.map((p) => p[0]) : 'unknown');
+      
+      try {
+        // Log FormData structure for debugging
+        if (formData._parts) {
+          console.log('📦 FormData structure:', {
+            partsCount: formData._parts.length,
+            parts: formData._parts.map((p) => ({
+              key: p[0],
+              valueType: typeof p[1],
+              valueIsObject: typeof p[1] === 'object',
+              valueKeys: typeof p[1] === 'object' ? Object.keys(p[1] || {}) : [],
+            })),
+          });
+        }
+        
+        // Use the same request pattern as other APIs, but override headers for FormData
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout for large files
+        
+        const response = await fetch(url, {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'Accept': '*/*',
+            // Do NOT set Content-Type - React Native FormData sets it automatically with boundary
+          },
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        
+        console.log('📥 Response received:', {
+          status: response.status,
+          statusText: response.statusText,
+          ok: response.ok,
+          headers: Object.fromEntries(response.headers.entries()),
+        });
+        
+        if (!response.ok) {
+          let errorData;
+          try {
+            const responseText = await response.text();
+            errorData = JSON.parse(responseText);
+          } catch (parseError) {
+            const responseText = await response.text();
+            errorData = { error: responseText || 'Request failed' };
+          }
+          const error = new Error(errorData.error || `HTTP error! status: ${response.status}`);
+          error.status = response.status;
+          console.error('❌ Book creation failed:', error);
+          throw error;
+        }
+        
+        const responseText = await response.text();
+        console.log('📥 Response text length:', responseText.length);
+        console.log('📥 Response text preview:', responseText.substring(0, 200));
+        
+        const result = JSON.parse(responseText);
+        console.log('✅ Book created successfully:', {
+          bookId: result.book?.id,
+          title: result.book?.title,
+          hasCoverImage: !!result.book?.cover_image_url,
+          hasPdf: !!result.book?.pdf_url,
+        });
+        return result;
+      } catch (error) {
+        console.error('❌ Error creating book with FormData:', error);
+        console.error('Error details:', {
+          message: error.message,
+          name: error.name,
+          stack: error.stack,
+          status: error.status,
+        });
+        
+        // Re-throw with more context if it's a network error
+        if (error.name === 'AbortError') {
+          throw new Error(`Request timeout: ${url}. The request took too long. Try with smaller files.`);
+        }
+        
+        if (error.message === 'Network request failed' || error.name === 'TypeError') {
+          const networkError = new Error(
+            `Network error: Cannot reach the server at ${url}\n\n` +
+            `Current configuration: ${this.baseUrl.includes('localhost') ? 'LOCAL' : 'VERCEL PRODUCTION'}\n\n` +
+            `Troubleshooting:\n` +
+            `1. Check internet connection\n` +
+            `2. Check if ${this.baseUrl} is accessible\n` +
+            `3. For Vercel: Verify ${this.baseUrl} is accessible\n` +
+            `4. Try uploading without files first to test connection\n` +
+            `5. Check Vercel function logs for errors`
+          );
+          networkError.originalError = error;
+          throw networkError;
+        }
+        
+        throw error;
+      }
+    } else {
+      // Use JSON for metadata only (backward compatible)
+      return this.request('/api/books', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    }
   }
 
   async updateBook(id, data) {
@@ -342,12 +447,22 @@ class ApiClient {
     });
 
     try {
+      // Test connection first (optional - helps with debugging)
+      console.log('🔍 Testing connection to:', url);
+      
       // Make the request with timeout
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 second timeout for large files
       
       let response;
       try {
+        console.log('📡 Sending fetch request...', {
+          method: 'POST',
+          url: url,
+          hasBody: !!formData,
+          timeout: '90s',
+        });
+        
         // React Native FormData automatically sets Content-Type with boundary
         // Do NOT set Content-Type header manually - let React Native handle it
         response = await fetch(url, {
@@ -360,6 +475,8 @@ class ApiClient {
           signal: controller.signal,
         });
         clearTimeout(timeoutId);
+        
+        console.log('✅ Fetch request completed, status:', response.status);
         
         // Log response headers for debugging
         console.log('📥 Response headers:', {
@@ -379,6 +496,12 @@ class ApiClient {
           usingLocalServer: USE_LOCAL_SERVER,
           isDev: __DEV__,
           errorType: fetchError.constructor.name,
+          stack: fetchError.stack,
+          // Additional debugging info
+          fileName: fileName,
+          fileType: fileType,
+          bucket: bucket,
+          folder: folder,
         });
         
         // Handle different types of fetch errors
@@ -400,11 +523,19 @@ class ApiClient {
             await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1))); // Exponential backoff
             return this.uploadFile(file, bucket, folder, authorId, retryCount + 1);
           }
-          const errorMsg = `Network error: Cannot reach the server at ${url}. ` +
-            `Please check:\n` +
-            `1. Your internet connection\n` +
-            `2. If using local server, make sure admin server is running\n` +
-            `3. If using Vercel, check if the URL is accessible`;
+          // Provide detailed error message with troubleshooting steps
+          const errorMsg = `Network error: Cannot reach the server at ${url}\n\n` +
+            `This is likely an Android emulator networking issue.\n\n` +
+            `Troubleshooting:\n` +
+            `1. Check if the Android emulator has internet connectivity:\n` +
+            `   - Open Chrome browser in the emulator\n` +
+            `   - Try to visit https://admin-orcin-omega.vercel.app\n` +
+            `   - If it doesn't load, the emulator has no internet\n\n` +
+            `2. Restart the Android emulator with internet connectivity\n\n` +
+            `3. Try testing on a physical Android device instead of emulator\n\n` +
+            `4. Check your computer's internet connection\n\n` +
+            `5. If Postman works but mobile app doesn't, it's likely an emulator networking issue\n\n` +
+            `Note: Postman works fine, so the API is working correctly. This is a client-side networking issue.`;
           throw new Error(errorMsg);
         }
         throw fetchError;
