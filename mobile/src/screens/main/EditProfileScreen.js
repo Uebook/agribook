@@ -16,6 +16,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import ImagePicker from 'react-native-image-crop-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Header from '../../components/common/Header';
 import { userProfile } from '../../services/dummyData';
 import { useAuth } from '../../context/AuthContext';
@@ -350,110 +351,90 @@ const EditProfileScreen = ({ navigation }) => {
   }, [selectImageFromCamera, selectImageFromGallery]);
 
   const handleSave = async () => {
-    // Validate form
-    if (!formData.name.trim()) {
-      Alert.alert('Error', 'Please enter your name');
+    // Validation
+    if (!formData.name || formData.name.trim().length < 2) {
+      Alert.alert('Validation', 'Enter a valid full name');
       return;
     }
-    if (formData.email && !formData.email.includes('@')) {
-      Alert.alert('Error', 'Please enter a valid email address');
-      return;
-    }
-    if (formData.mobile && formData.mobile.length < 10) {
-      Alert.alert('Error', 'Please enter a valid mobile number');
+
+    if (formData.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(formData.email)) {
+      Alert.alert('Validation', 'Enter a valid email');
       return;
     }
 
     setLoading(true);
 
     try {
-      // Upload avatar if a new one was selected
-      let avatarUrl = avatarUri;
-      if (avatarFile && avatarFile.path && !avatarFile.path.startsWith('http')) {
-        // New image selected, upload it
-        setUploadingAvatar(true);
-        try {
-          // Pass file object directly - uploadFile handles both path and uri
-          console.log('📤 Uploading avatar file:', {
-            path: avatarFile.path?.substring(0, 50),
-            mime: avatarFile.mime,
-            filename: avatarFile.filename,
-          });
-          const uploadResult = await apiClient.uploadFile(
-            avatarFile, // Pass directly - has path, mime, filename
-            'avatars',
-            'users'
-          );
-          // Safely extract URL using bracket notation and 'in' operator
-          if (uploadResult && typeof uploadResult === 'object' && !(uploadResult instanceof Error)) {
-            avatarUrl = ('url' in uploadResult && uploadResult['url']) 
-              ? uploadResult['url'] 
-              : null;
-            if (avatarUrl) {
-              setAvatarUri(avatarUrl);
-            }
-          }
-        } catch (uploadError) {
-          console.error('Error uploading avatar:', uploadError);
-          Alert.alert('Error', 'Failed to upload profile photo. Profile will be updated without photo.');
-        } finally {
-          setUploadingAvatar(false);
-        }
+      // Get user ID from context or AsyncStorage
+      let targetUserId = userId || userData?.id;
+      
+      // If userId is not available from context, try to get from AsyncStorage
+      if (!targetUserId) {
+        const USER_STORAGE_KEY = '@agribook_user';
+        const raw = await AsyncStorage.getItem(USER_STORAGE_KEY);
+        const user = raw ? JSON.parse(raw) : null;
+        targetUserId = user?.id;
       }
 
-      // Update user via API
-      if (userId) {
-        const updatePayload = {
-          name: formData.name.trim(),
-          email: formData.email.trim() || null,
-          mobile: formData.mobile.trim() || null,
-          bio: formData.bio.trim() || null,
-          address: formData.address.trim() || null,
-          city: formData.city.trim() || null,
-          state: formData.state.trim() || null,
-          pincode: formData.pincode.trim() || null,
-          website: formData.website.trim() || null,
-        };
+      // Also check auth storage as fallback
+      if (!targetUserId) {
+        const AUTH_STORAGE_KEY = '@agribook_auth';
+        const authRaw = await AsyncStorage.getItem(AUTH_STORAGE_KEY);
+        const auth = authRaw ? JSON.parse(authRaw) : null;
+        targetUserId = auth?.userId;
+      }
 
-        // Include avatar_url if we have one
-        if (avatarUrl) {
-          updatePayload.avatar_url = avatarUrl;
-        }
+      if (!targetUserId) {
+        throw new Error('Not authenticated. Please log in again.');
+      }
 
-        const response = await apiClient.updateUser(userId, updatePayload);
+      // Prepare multipart form
+      const formPayload = new FormData();
+      formPayload.append('user_id', targetUserId);
+      formPayload.append('full_name', formData.name.trim());
+      formPayload.append('email', formData.email.trim() || '');
+      formPayload.append('phone', formData.mobile.trim() || '');
+      formPayload.append('address', formData.address.trim() || '');
+      formPayload.append('bio', formData.bio?.trim() || '');
+      formPayload.append('city', formData.city?.trim() || '');
+      formPayload.append('state', formData.state?.trim() || '');
+      formPayload.append('pincode', formData.pincode?.trim() || '');
+      formPayload.append('website', formData.website?.trim() || '');
 
-        console.log('Update response:', response); // Debug log
-
-        // Update local user data - handle both response.user and direct user object
-        const updatedUserData = response.user || response;
-        if (updatedUserData) {
-          await updateUserData(updatedUserData);
-        } else {
-          console.warn('No user data in response:', response);
-          // Fallback: update with form data
-          await updateUserData({
-            ...userData,
-            ...formData,
-            avatar_url: avatarUrl,
-          });
-        }
-      } else {
-        // If no userId, just update local data
-        await updateUserData({
-          ...userData,
-          ...formData,
-          avatar_url: avatarUrl,
+      // Add profile picture if selected
+      if (avatarFile && avatarFile.path && !avatarFile.path.startsWith('http')) {
+        formPayload.append('profile_picture', {
+          uri: avatarFile.path,
+          type: avatarFile.mime || 'image/jpeg',
+          name: avatarFile.filename || `profile_${Date.now()}.jpg`,
         });
       }
 
+      // API call
+      const response = await apiClient.updateProfile(formPayload);
+
+      if (!response?.success) {
+        throw new Error(response?.message || 'Update failed');
+      }
+
+      const updatedProfile = response.data || response;
+
+      // Update auth context
+      await updateUserData({
+        ...userData,
+        ...updatedProfile,
+        avatar_url: updatedProfile.profile_picture || updatedProfile.avatar_url || avatarUri,
+      });
+
+      // Cache profile locally using the same key as AuthContext
+      const USER_STORAGE_KEY = '@agribook_user';
+      await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedProfile));
+
       Alert.alert('Success', 'Profile updated successfully!', [
-        {
-          text: 'OK',
-          onPress: () => navigation.goBack(),
-        },
+        { text: 'OK', onPress: () => navigation.goBack() },
       ]);
     } catch (error) {
-      console.error('Error updating profile:', error);
+      console.error('Profile update error:', error);
       const errorMessage = error.message || error.error || 'Failed to update profile. Please try again.';
       Alert.alert('Error', errorMessage);
     } finally {
@@ -622,8 +603,8 @@ const EditProfileScreen = ({ navigation }) => {
           )}
 
           {/* Save Button */}
-          <TouchableOpacity 
-            style={[styles.saveButton, loading && styles.saveButtonDisabled]} 
+          <TouchableOpacity
+            style={[styles.saveButton, loading && styles.saveButtonDisabled]}
             onPress={handleSave}
             disabled={loading}
           >

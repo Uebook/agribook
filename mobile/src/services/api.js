@@ -328,6 +328,201 @@ class ApiClient {
     });
   }
 
+  // Update profile with FormData (supports file upload)
+  async updateProfile(formData) {
+    const url = `${this.baseUrl}/api/profile/update`;
+    
+    console.log('📤 Updating profile:', {
+      url,
+      baseUrl: this.baseUrl,
+      hasFormData: !!formData,
+      usingLocalServer: USE_LOCAL_SERVER,
+      isDev: __DEV__,
+    });
+    
+    // Log FormData structure for debugging
+    if (formData._parts) {
+      console.log('📦 FormData structure:', formData._parts.map((part, index) => ({
+        index,
+        key: part[0],
+        valueType: typeof part[1],
+        valueIsObject: typeof part[1] === 'object',
+        valueKeys: typeof part[1] === 'object' ? Object.keys(part[1] || {}) : [],
+        valuePreview: typeof part[1] === 'string' 
+          ? part[1].substring(0, 50) 
+          : typeof part[1] === 'object' && part[1]?.uri
+          ? `{uri: ${part[1].uri.substring(0, 30)}..., type: ${part[1].type}, name: ${part[1].name}}`
+          : String(part[1]).substring(0, 50),
+      })));
+    }
+    
+    try {
+      // Use XMLHttpRequest for FormData (more reliable for file uploads)
+      const response = await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        
+        xhr.open('PUT', url);
+        xhr.setRequestHeader('Accept', '*/*');
+        // Do NOT set Content-Type - let React Native FormData set it automatically
+        
+        xhr.onload = () => {
+          const responseText = xhr.responseText;
+          const responseHeaders = new Headers();
+          
+          // Parse response headers
+          const allHeaders = xhr.getAllResponseHeaders();
+          if (allHeaders) {
+            allHeaders.split('\r\n').forEach(line => {
+              const parts = line.split(': ');
+              if (parts.length === 2) {
+                responseHeaders.set(parts[0], parts[1]);
+              }
+            });
+          }
+          
+          console.log('✅ XMLHttpRequest completed:', {
+            status: xhr.status,
+            statusText: xhr.statusText,
+            responseLength: responseText?.length,
+          });
+          
+          resolve({
+            ok: xhr.status >= 200 && xhr.status < 300,
+            status: xhr.status,
+            statusText: xhr.statusText,
+            headers: responseHeaders,
+            text: async () => responseText,
+            json: async () => {
+              try {
+                return JSON.parse(responseText);
+              } catch (e) {
+                throw new Error('Invalid JSON response');
+              }
+            },
+          });
+        };
+        
+        xhr.onerror = (error) => {
+          console.error('❌ XMLHttpRequest onerror:', {
+            readyState: xhr.readyState,
+            status: xhr.status,
+            statusText: xhr.statusText,
+            responseText: xhr.responseText?.substring(0, 200),
+            error: error,
+            url: url,
+            baseUrl: this.baseUrl,
+          });
+          reject(new Error('Network request failed - XMLHttpRequest error'));
+        };
+        
+        xhr.ontimeout = () => {
+          console.error('❌ XMLHttpRequest timeout after 90s');
+          reject(new Error('Request timeout'));
+        };
+        
+        xhr.timeout = 90000; // 90 seconds
+        
+        console.log('📡 Sending XMLHttpRequest PUT request to:', url);
+        // Send FormData
+        xhr.send(formData);
+      });
+      
+      if (!response.ok) {
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (parseError) {
+          const text = await response.text();
+          errorData = { error: text || 'Request failed' };
+        }
+        
+        const errorMessage = errorData.error || errorData.message || `HTTP error! status: ${response.status}`;
+        const error = new Error(errorMessage);
+        error.status = response.status;
+        error.details = errorData.details;
+        throw error;
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('❌ Profile update error:', error);
+      console.error('Error details:', {
+        name: error.name,
+        message: error.message,
+        url: url,
+        baseUrl: this.baseUrl,
+        usingLocalServer: USE_LOCAL_SERVER,
+        isDev: __DEV__,
+        stack: error.stack,
+      });
+      
+      // Fallback to fetch if XMLHttpRequest fails
+      if (error.message && (error.message.includes('XMLHttpRequest') || error.message.includes('Network request failed'))) {
+        console.warn('⚠️ XMLHttpRequest failed, trying fetch...');
+        try {
+          const fetchResponse = await fetch(url, {
+            method: 'PUT',
+            body: formData,
+            headers: {
+              'Accept': '*/*',
+              // Do NOT set Content-Type - React Native FormData sets it automatically
+            },
+          });
+          
+          console.log('✅ Fetch request completed:', {
+            status: fetchResponse.status,
+            statusText: fetchResponse.statusText,
+            ok: fetchResponse.ok,
+          });
+          
+          if (!fetchResponse.ok) {
+            let errorData;
+            try {
+              errorData = await fetchResponse.json();
+            } catch (parseError) {
+              const text = await fetchResponse.text();
+              errorData = { error: text || 'Request failed' };
+            }
+            
+            const errorMessage = errorData.error || errorData.message || `HTTP error! status: ${fetchResponse.status}`;
+            const fetchError = new Error(errorMessage);
+            fetchError.status = fetchResponse.status;
+            fetchError.details = errorData.details;
+            throw fetchError;
+          }
+          
+          return await fetchResponse.json();
+        } catch (fetchError) {
+          console.error('❌ Fetch also failed:', fetchError);
+          console.error('Fetch error details:', {
+            name: fetchError.name,
+            message: fetchError.message,
+            url: url,
+            baseUrl: this.baseUrl,
+            usingLocalServer: USE_LOCAL_SERVER,
+            isDev: __DEV__,
+          });
+          
+          // Provide more helpful error message
+          if (fetchError.message && fetchError.message.includes('Network request failed')) {
+            throw new Error(
+              `Network error: Cannot reach ${url}\n\n` +
+              `Please check:\n` +
+              `1. Internet connection\n` +
+              `2. If ${this.baseUrl} is accessible\n` +
+              `3. API server status\n\n` +
+              `Current config: ${USE_LOCAL_SERVER ? 'LOCAL SERVER' : 'VERCEL PRODUCTION'}`
+            );
+          }
+          
+          throw fetchError;
+        }
+      }
+      
+      throw error;
+    }
+  }
+
   async deleteUser(id) {
     return this.request(`/api/users/${id}`, {
       method: 'DELETE',
