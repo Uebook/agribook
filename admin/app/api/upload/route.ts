@@ -478,6 +478,28 @@ async function handleFileUpload(formData: FormData) {
       );
     }
     
+    // Verify bucket exists before uploading
+    try {
+      const { data: buckets, error: listError } = await supabase.storage.listBuckets();
+      if (listError) {
+        console.error('Error listing buckets:', listError);
+      } else {
+        const bucketExists = buckets?.some(b => b.name === bucket);
+        if (!bucketExists) {
+          console.error(`Bucket "${bucket}" does not exist. Available buckets:`, buckets?.map(b => b.name) || []);
+          return NextResponse.json(
+            { 
+              error: `Bucket "${bucket}" not found. Please create the bucket in Supabase Storage.`,
+              details: `Available buckets: ${buckets?.map(b => b.name).join(', ') || 'none'}. Please create a bucket named "${bucket}" in your Supabase Storage.`
+            },
+            { status: 404 }
+          );
+        }
+      }
+    } catch (verifyError) {
+      console.warn('Could not verify bucket existence, proceeding with upload:', verifyError);
+    }
+
     // Upload to Supabase Storage
     const { data, error } = await supabase.storage
       .from(bucket)
@@ -494,6 +516,8 @@ async function handleFileUpload(formData: FormData) {
         uniqueFileName,
         fileSize: fileBuffer.length,
         contentType,
+        errorCode: (error as any).statusCode || (error as any).status,
+        errorMessage: error.message,
       });
       
       // Provide more specific error messages
@@ -501,16 +525,20 @@ async function handleFileUpload(formData: FormData) {
       const errorAny = error as any;
       if (error.message) {
         errorMessage = error.message;
-      } else if (errorAny.statusCode === 404 || errorAny.status === 404) {
-        errorMessage = `Bucket "${bucket}" not found. Please create the bucket in Supabase Storage.`;
-      } else if (errorAny.statusCode === 403 || errorAny.status === 403) {
-        errorMessage = `Permission denied for bucket "${bucket}". Please check bucket permissions.`;
+      } else if (errorAny.statusCode === 404 || errorAny.status === 404 || error.message?.includes('not found')) {
+        errorMessage = `Bucket "${bucket}" not found. Please create the bucket "${bucket}" in Supabase Storage Dashboard.`;
+      } else if (errorAny.statusCode === 403 || errorAny.status === 403 || error.message?.includes('permission')) {
+        errorMessage = `Permission denied for bucket "${bucket}". Please check bucket permissions in Supabase Storage.`;
       } else if (errorAny.statusCode === 413 || errorAny.status === 413) {
         errorMessage = 'File too large. Please reduce the file size.';
       }
       
       return NextResponse.json(
-        { error: errorMessage },
+        { 
+          error: errorMessage,
+          details: error.message || 'Unknown error',
+          bucket,
+        },
         { status: 500 }
       );
     }

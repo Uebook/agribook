@@ -44,7 +44,7 @@ const GovernmentCurriculumScreen = ({ navigation }) => {
         setLoading(true);
         setError(null);
         console.log('📚 GovernmentCurriculumScreen: Fetching curriculums...', { selectedState });
-        
+
         const params = {
           status: 'published', // Show only published curriculums (not pending)
           limit: 100,
@@ -53,14 +53,14 @@ const GovernmentCurriculumScreen = ({ navigation }) => {
           params.state = selectedState;
           console.log('📚 GovernmentCurriculumScreen: Added state filter:', selectedState);
         }
-        
+
         console.log('📚 GovernmentCurriculumScreen: API params:', params);
         const response = await apiClient.getCurriculums(params);
         console.log('📚 GovernmentCurriculumScreen: API response:', {
           curriculumsCount: response.curriculums?.length || 0,
           total: response.pagination?.total || 0,
         });
-        
+
         setCurriculums(response.curriculums || []);
       } catch (err) {
         console.error('❌ GovernmentCurriculumScreen: Error fetching curriculums:', err);
@@ -96,15 +96,19 @@ const GovernmentCurriculumScreen = ({ navigation }) => {
       `Would you like to view or download "${curriculum.title}"?`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'View', onPress: () => {
-          // Navigate to PDF viewer or open URL
-          console.log('View PDF:', pdfUrl);
-          // TODO: Implement PDF viewer navigation
-        }},
-        { text: 'Download', onPress: () => {
-          console.log('Download PDF:', pdfUrl);
-          // TODO: Implement PDF download
-        }},
+        {
+          text: 'View', onPress: () => {
+            // Navigate to PDF viewer or open URL
+            console.log('View PDF:', pdfUrl);
+            // TODO: Implement PDF viewer navigation
+          }
+        },
+        {
+          text: 'Download', onPress: () => {
+            console.log('Download PDF:', pdfUrl);
+            // TODO: Implement PDF download
+          }
+        },
       ]
     );
   }, []);
@@ -113,7 +117,7 @@ const GovernmentCurriculumScreen = ({ navigation }) => {
     const bannerUrl = item.banner_url || item.banner;
     const stateName = item.state_name || item.stateName || item.state;
     const publishedDate = item.published_date || item.publishedDate;
-    
+
     return (
       <TouchableOpacity
         style={styles.curriculumCard}
