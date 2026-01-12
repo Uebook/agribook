@@ -756,6 +756,20 @@ class ApiClient {
     return this.request(`/api/purchases?user_id=${userId}`);
   }
 
+  async purchaseBook(userId, bookId, paymentMethod, transactionId, audioBookId = null, amount = 0) {
+    return this.request('/api/purchase', {
+      method: 'POST',
+      body: JSON.stringify({
+        user_id: userId,
+        book_id: bookId || null,
+        audio_book_id: audioBookId || null,
+        payment_method: paymentMethod || 'razorpay',
+        transaction_id: transactionId,
+        amount: amount,
+      }),
+    });
+  }
+
   // Razorpay API
   async createRazorpayOrder(data) {
     return this.request('/api/payments/create-order', {
