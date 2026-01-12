@@ -5,7 +5,30 @@
  * To update: Get values from Supabase Dashboard → Settings → API
  */
 
-import { createClient } from '@supabase/supabase-js';
+// Immediate log to verify module is loading
+console.log('🚀 SUPABASE MODULE STARTING - Line 1');
+
+let createClient;
+try {
+  console.log('🚀 Importing createClient...');
+  const supabaseModule = require('@supabase/supabase-js');
+  createClient = supabaseModule.createClient;
+  console.log('✅ createClient imported successfully:', typeof createClient);
+} catch (importError) {
+  console.error('❌ CRITICAL: Failed to import createClient:', importError);
+  createClient = null;
+}
+
+// Also try ES6 import as fallback
+if (!createClient) {
+  try {
+    const { createClient: createClientES6 } = require('@supabase/supabase-js');
+    createClient = createClientES6;
+    console.log('✅ createClient imported via ES6 fallback');
+  } catch (e) {
+    console.error('❌ ES6 import also failed:', e);
+  }
+}
 
 console.log('📦 Supabase module loading...');
 
@@ -47,15 +70,21 @@ console.log('🔍 Validation check:', {
 
 if (hasValidUrl && hasValidKey) {
   console.log('✅ Validation passed, creating client...');
-  try {
-    console.log('🔧 Calling createClient with:', {
-      url: SUPABASE_URL,
-      keyLength: SUPABASE_ANON_KEY.length,
-      keyPreview: SUPABASE_ANON_KEY.substring(0, 20) + '...',
-    });
+  
+  if (!createClient) {
+    console.error('❌ CRITICAL: createClient function is not available!');
+    console.error('❌ Cannot create Supabase client without createClient function');
+  } else {
+    try {
+      console.log('🔧 Calling createClient with:', {
+        url: SUPABASE_URL,
+        keyLength: SUPABASE_ANON_KEY.length,
+        keyPreview: SUPABASE_ANON_KEY.substring(0, 20) + '...',
+        createClientType: typeof createClient,
+      });
 
-    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    
+      supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
     console.log('🔧 createClient returned:', {
       isNull: supabase === null,
       isUndefined: supabase === undefined,
@@ -73,13 +102,14 @@ if (hasValidUrl && hasValidKey) {
       console.error('❌ Supabase client is null after createClient call');
     }
   } catch (error) {
-    console.error('❌ CRITICAL: Exception during createClient:', error);
-    console.error('Error details:', {
-      message: error?.message,
-      name: error?.name,
-      stack: error?.stack?.substring(0, 500),
-    });
-    supabase = null;
+      console.error('❌ CRITICAL: Exception during createClient:', error);
+      console.error('Error details:', {
+        message: error?.message,
+        name: error?.name,
+        stack: error?.stack?.substring(0, 500),
+      });
+      supabase = null;
+    }
   }
 } else {
   console.error('❌ CRITICAL: Validation failed - credentials are invalid:', {
