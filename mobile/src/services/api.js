@@ -786,8 +786,19 @@ class ApiClient {
   }
 
   // Curriculum API
-  async getCurriculum() {
-    return this.request('/api/curriculum');
+  async getCurriculums(params = {}) {
+    const queryParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        queryParams.append(key, value.toString());
+      }
+    });
+    const query = queryParams.toString();
+    return this.request(`/api/curriculum${query ? `?${query}` : ''}`);
+  }
+
+  async getCurriculum(id) {
+    return this.request(`/api/curriculum/${id}`);
   }
 
   // Reviews API
