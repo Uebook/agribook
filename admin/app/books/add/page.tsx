@@ -28,37 +28,34 @@ export default function AddBookPage() {
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [pdfPreview, setPdfPreview] = useState<string>('');
   const [loading, setLoading] = useState(false);
-  const [loadingCategories, setLoadingCategories] = useState(true);
   const [authors, setAuthors] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [uploadProgress, setUploadProgress] = useState(0);
 
-  // Fetch authors and categories on mount
+  // Fetch categories on mount
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchCategories = async () => {
       try {
-        // Fetch authors
-        const authorsResponse = await apiClient.getAuthors();
-        setAuthors(authorsResponse.authors || []);
+        const response = await apiClient.getCategories();
+        setCategories(response.categories || []);
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+      }
+    };
+    fetchCategories();
+  }, []);
+
+  // Fetch authors on mount
+  useEffect(() => {
+    const fetchAuthors = async () => {
+      try {
+        const response = await apiClient.getAuthors();
+        setAuthors(response.authors || []);
       } catch (error) {
         console.error('Error fetching authors:', error);
       }
-
-      try {
-        // Fetch categories from database
-        setLoadingCategories(true);
-        const categoriesResponse = await apiClient.getCategories({ limit: 100 });
-        console.log('📚 Fetched categories:', categoriesResponse.categories?.length || 0);
-        setCategories(categoriesResponse.categories || []);
-      } catch (error) {
-        console.error('Error fetching categories:', error);
-        // Fallback to empty array if fetch fails
-        setCategories([]);
-      } finally {
-        setLoadingCategories(false);
-      }
     };
-    fetchData();
+    fetchAuthors();
   }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -233,20 +230,12 @@ export default function AddBookPage() {
                     onChange={handleInputChange}
                     required
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    disabled={loadingCategories || categories.length === 0}
                   >
-                    <option value="">
-                      {loadingCategories ? 'Loading categories...' : categories.length === 0 ? 'No categories available' : 'Select Category'}
-                    </option>
+                    <option value="">Select Category</option>
                     {categories.map(cat => (
                       <option key={cat.id} value={cat.id}>{cat.name}</option>
                     ))}
                   </select>
-                  {!loadingCategories && categories.length === 0 && (
-                    <p className="text-xs text-red-500 mt-1">
-                      No categories found. Please create categories in the Categories section.
-                    </p>
-                  )}
                 </div>
 
                 <div>
