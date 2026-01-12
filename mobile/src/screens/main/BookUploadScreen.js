@@ -440,20 +440,15 @@ const BookUploadScreen = ({ navigation }) => {
           setUploadProgress(20);
           try {
             console.log('📤 Uploading cover image separately...');
-            // Convert to format expected by uploadFile (using path, mime, filename)
-            const fileForUpload = {
-              uri: coverImageFile.path,
-              type: coverImageFile.mime || 'image/jpeg',
-              name: coverImageFile.filename || `cover_${Date.now()}.jpg`,
-            };
             console.log('📤 coverImageFile:', {
               path: coverImageFile.path?.substring(0, 50),
               mime: coverImageFile.mime,
               filename: coverImageFile.filename,
             });
             
+            // Pass file object directly - uploadFile handles path, mime, filename
             const uploadResult = await apiClient.uploadFile(
-              fileForUpload,
+              coverImageFile, // Pass directly - has path, mime, filename
               'books',
               'covers'
             );
@@ -605,14 +600,9 @@ const BookUploadScreen = ({ navigation }) => {
           setUploadingCoverImage(true);
           setUploadProgress(Math.round((currentStep / totalSteps) * 100));
           try {
-            // Convert to format expected by uploadFile (using path, mime, filename)
-            const fileForUpload = {
-              uri: coverImageFile.path,
-              type: coverImageFile.mime || 'image/jpeg',
-              name: coverImageFile.filename || `cover_${Date.now()}.jpg`,
-            };
+            // Pass file object directly - uploadFile handles path, mime, filename
             const uploadResult = await apiClient.uploadFile(
-              fileForUpload,
+              coverImageFile, // Pass directly - has path, mime, filename
               'audio-books',
               'covers'
             );

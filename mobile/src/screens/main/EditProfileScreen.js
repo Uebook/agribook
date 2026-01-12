@@ -373,20 +373,14 @@ const EditProfileScreen = ({ navigation }) => {
         // New image selected, upload it
         setUploadingAvatar(true);
         try {
-          // Convert react-native-image-crop-picker format to uploadFile format
-          const fileForUpload = {
-            uri: avatarFile.path, // uploadFile will normalize this
-            type: avatarFile.mime || 'image/jpeg',
-            name: avatarFile.filename || `avatar_${Date.now()}.jpg`,
-          };
+          // Pass file object directly - uploadFile handles both path and uri
           console.log('📤 Uploading avatar file:', {
             path: avatarFile.path?.substring(0, 50),
             mime: avatarFile.mime,
             filename: avatarFile.filename,
-            converted: fileForUpload,
           });
           const uploadResult = await apiClient.uploadFile(
-            fileForUpload,
+            avatarFile, // Pass directly - has path, mime, filename
             'avatars',
             'users'
           );
