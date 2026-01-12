@@ -369,21 +369,45 @@ class ApiClient {
     }
 
     // Handle file URI - support both file:// and content:// URIs (Android)
-    const fileUri = file.uri || file.path;
+    // Also support react-native-image-crop-picker format (uses path)
+    // react-native-image-crop-picker returns path directly (e.g., "/storage/emulated/0/...")
+    // react-native-image-picker returns uri (e.g., "file:///storage/...")
+    let fileUri = file.uri || file.path;
     if (!fileUri) {
-      throw new Error('File URI is required');
+      throw new Error('File URI or path is required');
     }
 
-    // Normalize URI - ensure it's in the correct format
+    console.log('📄 Original file object:', {
+      hasUri: !!file.uri,
+      hasPath: !!file.path,
+      uri: file.uri?.substring(0, 50),
+      path: file.path?.substring(0, 50),
+      type: file.type,
+      mime: file.mime,
+      name: file.name,
+      filename: file.filename,
+      keys: Object.keys(file),
+    });
+
+    // Normalize URI - react-native-image-crop-picker uses absolute paths
+    // If it's already a file:// or content:// URI, use it as is
+    // If it's a path from react-native-image-crop-picker, ensure it has file:// prefix
     let normalizedUri = fileUri;
     if (!normalizedUri.startsWith('file://') && !normalizedUri.startsWith('content://') && !normalizedUri.startsWith('http://') && !normalizedUri.startsWith('https://')) {
-      // If it's a relative path, make it absolute
+      // react-native-image-crop-picker returns absolute paths like "/storage/emulated/0/..."
+      // We need to add file:// prefix
       if (normalizedUri.startsWith('/')) {
         normalizedUri = 'file://' + normalizedUri;
       } else {
         normalizedUri = 'file:///' + normalizedUri;
       }
     }
+    
+    console.log('📄 Normalized URI:', {
+      original: fileUri.substring(0, 50),
+      normalized: normalizedUri.substring(0, 50),
+      scheme: normalizedUri.split(':')[0],
+    });
 
     // Extract file name - ensure we have a valid name
     let fileName = file.name;
@@ -402,7 +426,8 @@ class ApiClient {
     }
     
     // Use the actual file type, or fallback based on file extension
-    let fileType = file.type;
+    // Support both react-native-image-picker (type) and react-native-image-crop-picker (mime)
+    let fileType = file.type || file.mime;
     if (!fileType) {
       const ext = fileName.split('.').pop()?.toLowerCase();
       const mimeTypes = {
@@ -422,9 +447,31 @@ class ApiClient {
     
     // Append file - React Native FormData format
     // This matches the OkHttp pattern: addFormDataPart("file", "", RequestBody.create(...))
-    // Use normalized URI
+    // For react-native-image-crop-picker: use path directly (absolute path like "/storage/emulated/0/...")
+    // For react-native-image-picker: use normalizedUri with file:// prefix
+    // React Native FormData accepts both absolute paths and file:// URIs
+    let fileUriForFormData;
+    if (file.path) {
+      // react-native-image-crop-picker - use path directly (no file:// prefix needed)
+      fileUriForFormData = file.path;
+      console.log('📦 Using react-native-image-crop-picker path directly');
+    } else {
+      // react-native-image-picker - use normalized URI with file:// prefix
+      fileUriForFormData = normalizedUri;
+      console.log('📦 Using react-native-image-picker normalized URI');
+    }
+    
+    console.log('📦 File for FormData:', {
+      hasPath: !!file.path,
+      hasUri: !!file.uri,
+      usingPath: !!file.path,
+      fileUriForFormData: fileUriForFormData?.substring(0, 50),
+      type: fileType,
+      name: fileName,
+    });
+    
     formData.append('file', {
-      uri: normalizedUri,
+      uri: fileUriForFormData,
       type: fileType,
       name: fileName,
     });
@@ -474,24 +521,115 @@ class ApiClient {
       
       let response;
       try {
+        // Log FormData structure in detail (for debugging)
+        if (formData._parts) {
+          console.log('📦 FormData._parts structure:', formData._parts.map((part, index) => ({
+            index,
+            key: part[0],
+            valueType: typeof part[1],
+            valueIsObject: typeof part[1] === 'object',
+            valueKeys: typeof part[1] === 'object' ? Object.keys(part[1] || {}) : [],
+            valuePreview: typeof part[1] === 'string' 
+              ? part[1].substring(0, 50) 
+              : typeof part[1] === 'object' && part[1]?.uri
+              ? `{uri: ${part[1].uri.substring(0, 30)}..., type: ${part[1].type}, name: ${part[1].name}}`
+              : String(part[1]).substring(0, 50),
+          })));
+        }
+        
         console.log('📡 Sending fetch request...', {
           method: 'POST',
           url: url,
           hasBody: !!formData,
           timeout: '90s',
+          formDataKeys: formData._parts ? formData._parts.map(p => p[0]) : 'unknown',
         });
         
-        // React Native FormData automatically sets Content-Type with boundary
-        // Do NOT set Content-Type header manually - let React Native handle it
-        response = await fetch(url, {
-          method: 'POST',
-          body: formData,
-          headers: {
-            'Accept': '*/*',
-            // Explicitly do NOT set Content-Type - React Native FormData sets it automatically
-          },
-          signal: controller.signal,
-        });
+        // Try XMLHttpRequest first (more reliable for file uploads in React Native)
+        // Fallback to fetch if XMLHttpRequest is not available
+        let useXHR = true;
+        try {
+          response = await new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            
+            xhr.open('POST', url);
+            xhr.setRequestHeader('Accept', '*/*');
+            // Do NOT set Content-Type - let React Native FormData set it automatically
+            
+            xhr.onload = () => {
+              // Create a Response-like object for compatibility
+              const responseText = xhr.responseText;
+              const responseHeaders = new Headers();
+              
+              // Parse response headers
+              const allHeaders = xhr.getAllResponseHeaders();
+              if (allHeaders) {
+                allHeaders.split('\r\n').forEach(line => {
+                  const parts = line.split(': ');
+                  if (parts.length === 2) {
+                    responseHeaders.set(parts[0], parts[1]);
+                  }
+                });
+              }
+              
+              resolve({
+                ok: xhr.status >= 200 && xhr.status < 300,
+                status: xhr.status,
+                statusText: xhr.statusText,
+                headers: responseHeaders,
+                text: async () => responseText,
+                json: async () => {
+                  try {
+                    return JSON.parse(responseText);
+                  } catch (e) {
+                    throw new Error('Invalid JSON response');
+                  }
+                },
+              });
+            };
+            
+            xhr.onerror = (error) => {
+              console.error('❌ XMLHttpRequest onerror:', {
+                readyState: xhr.readyState,
+                status: xhr.status,
+                statusText: xhr.statusText,
+                responseText: xhr.responseText?.substring(0, 200),
+                error: error,
+              });
+              reject(new Error('Network request failed - XMLHttpRequest error'));
+            };
+            
+            xhr.ontimeout = () => {
+              console.error('❌ XMLHttpRequest timeout after 90s');
+              reject(new Error('Request timeout'));
+            };
+            
+            xhr.timeout = 90000; // 90 seconds
+            
+            // Send FormData
+            xhr.send(formData);
+          });
+          
+          console.log('✅ XMLHttpRequest completed, status:', response.status);
+        } catch (xhrError) {
+          console.warn('⚠️ XMLHttpRequest failed, trying fetch...', xhrError);
+          useXHR = false;
+          
+          // Fallback to fetch
+          // React Native FormData automatically sets Content-Type with boundary
+          // Do NOT set Content-Type header manually - let React Native handle it
+          response = await fetch(url, {
+            method: 'POST',
+            body: formData,
+            headers: {
+              'Accept': '*/*',
+              // Explicitly do NOT set Content-Type - React Native FormData sets it automatically
+            },
+            signal: controller.signal,
+          });
+          console.log('✅ Fetch request completed, status:', response.status);
+        }
+        
         clearTimeout(timeoutId);
         
         console.log('✅ Fetch request completed, status:', response.status);

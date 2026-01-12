@@ -19,7 +19,7 @@ import {
   Modal,
 } from 'react-native';
 import DocumentPicker from 'react-native-document-picker';
-import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
+import ImagePicker from 'react-native-image-crop-picker';
 import Header from '../../components/common/Header';
 import { useCategories } from '../../context/CategoriesContext';
 import { useSettings } from '../../context/SettingsContext';
@@ -192,32 +192,24 @@ const BookUploadScreen = ({ navigation }) => {
       return;
     }
 
-    launchCamera(
-      {
-        mediaType: 'photo',
-        quality: 0.8,
-        maxWidth: 800,
-        maxHeight: 800,
-      },
-      (response) => {
-        if (response.didCancel) {
-          return;
-        }
-        if (response.errorMessage) {
-          Alert.alert('Error', response.errorMessage);
-          return;
-        }
-        if (response.assets && response.assets[0]) {
-          const asset = response.assets[0];
-          setCoverImageUri(asset.uri || '');
-          setCoverImageFile({
-            uri: asset.uri || '',
-            type: asset.type || 'image/jpeg',
-            name: asset.fileName || `cover_${Date.now()}.jpg`,
-          });
-        }
+    try {
+      const img = await ImagePicker.openCamera({
+        width: 600,
+        height: 600,
+        cropping: true,
+        compressImageQuality: 0.8,
+      });
+      setCoverImageUri(img.path || '');
+      setCoverImageFile({
+        path: img.path || '',
+        mime: img.mime || 'image/jpeg',
+        filename: img.filename || `cover_${Date.now()}.jpg`,
+      });
+    } catch (e) {
+      if (e?.code !== 'E_PICKER_CANCELLED') {
+        Alert.alert('Error', 'Failed to take photo');
       }
-    );
+    }
   }, []);
 
   const selectImageFromGallery = useCallback(async () => {
@@ -229,32 +221,24 @@ const BookUploadScreen = ({ navigation }) => {
       return;
     }
 
-    launchImageLibrary(
-      {
-        mediaType: 'photo',
-        quality: 0.8,
-        maxWidth: 800,
-        maxHeight: 800,
-      },
-      (response) => {
-        if (response.didCancel) {
-          return;
-        }
-        if (response.errorMessage) {
-          Alert.alert('Error', response.errorMessage);
-          return;
-        }
-        if (response.assets && response.assets[0]) {
-          const asset = response.assets[0];
-          setCoverImageUri(asset.uri || '');
-          setCoverImageFile({
-            uri: asset.uri || '',
-            type: asset.type || 'image/jpeg',
-            name: asset.fileName || `cover_${Date.now()}.jpg`,
-          });
-        }
+    try {
+      const img = await ImagePicker.openPicker({
+        width: 600,
+        height: 600,
+        cropping: true,
+        compressImageQuality: 0.8,
+      });
+      setCoverImageUri(img.path || '');
+      setCoverImageFile({
+        path: img.path || '',
+        mime: img.mime || 'image/jpeg',
+        filename: img.filename || `cover_${Date.now()}.jpg`,
+      });
+    } catch (e) {
+      if (e?.code !== 'E_PICKER_CANCELLED') {
+        Alert.alert('Error', 'Failed to pick image');
       }
-    );
+    }
   }, []);
 
   const removeCoverImage = useCallback(() => {
@@ -443,167 +427,143 @@ const BookUploadScreen = ({ navigation }) => {
 
     try {
       if (bookType === 'book') {
-        // Single API call with FormData (like profile upload)
+        // Upload files separately first (like profile upload), then create book
         setUploadProgress(10);
         const bookPrice = parseFloat(formData.price) || 0;
         
-        // Create FormData with metadata and files (both optional)
-        const uploadFormData = new FormData();
+        let coverImageUrl = coverImageUri && coverImageUri.startsWith('http') ? coverImageUri : null;
+        let pdfUrl = null;
         
-        // Add metadata
-        uploadFormData.append('title', formData.title);
-        uploadFormData.append('author_id', userId);
-        uploadFormData.append('summary', formData.description);
-        uploadFormData.append('price', bookPrice.toString());
-        uploadFormData.append('original_price', bookPrice.toString());
-        if (formData.pages) uploadFormData.append('pages', formData.pages);
-        uploadFormData.append('language', formData.language);
-        uploadFormData.append('category_id', formData.category);
-        if (formData.isbn) uploadFormData.append('isbn', formData.isbn);
-        uploadFormData.append('is_free', 'false');
-        uploadFormData.append('published_date', new Date().toISOString());
-        
-        // Add cover image file if new one selected (optional)
-        if (coverImageFile && coverImageFile.uri && !coverImageFile.uri.startsWith('http')) {
+        // Step 1: Upload cover image if new one selected (like profile upload)
+        if (coverImageFile && coverImageFile.path && !coverImageFile.path.startsWith('http')) {
           setUploadingCoverImage(true);
-          
-          // Normalize URI like uploadFile does (important for React Native)
-          let normalizedUri = coverImageFile.uri;
-          if (!normalizedUri.startsWith('file://') && 
-              !normalizedUri.startsWith('content://') && 
-              !normalizedUri.startsWith('http://') && 
-              !normalizedUri.startsWith('https://')) {
-            // If it's a relative path, make it absolute
-            if (normalizedUri.startsWith('/')) {
-              normalizedUri = 'file://' + normalizedUri;
+          setUploadProgress(20);
+          try {
+            console.log('📤 Uploading cover image separately...');
+            // Convert to format expected by uploadFile (using path, mime, filename)
+            const fileForUpload = {
+              uri: coverImageFile.path,
+              type: coverImageFile.mime || 'image/jpeg',
+              name: coverImageFile.filename || `cover_${Date.now()}.jpg`,
+            };
+            console.log('📤 coverImageFile:', {
+              path: coverImageFile.path?.substring(0, 50),
+              mime: coverImageFile.mime,
+              filename: coverImageFile.filename,
+            });
+            
+            const uploadResult = await apiClient.uploadFile(
+              fileForUpload,
+              'books',
+              'covers'
+            );
+            
+            console.log('📥 Upload result received:', {
+              hasResult: !!uploadResult,
+              resultType: typeof uploadResult,
+              isError: uploadResult instanceof Error,
+              resultKeys: uploadResult && typeof uploadResult === 'object' ? Object.keys(uploadResult) : [],
+              resultValue: uploadResult,
+            });
+            
+            // Safely extract URL
+            if (uploadResult && typeof uploadResult === 'object' && !(uploadResult instanceof Error)) {
+              coverImageUrl = ('url' in uploadResult && uploadResult['url']) 
+                ? uploadResult['url'] 
+                : ('success' in uploadResult && uploadResult['success'] && 'url' in uploadResult)
+                ? uploadResult['url']
+                : null;
+              
+              console.log('📥 Extracted coverImageUrl:', coverImageUrl);
+              
+              if (coverImageUrl) {
+                setCoverImageUri(coverImageUrl);
+                console.log('✅ Cover image uploaded successfully:', coverImageUrl);
+              } else {
+                console.warn('⚠️ Upload result received but no URL found:', uploadResult);
+              }
             } else {
-              normalizedUri = 'file:///' + normalizedUri;
+              console.error('❌ Invalid upload result:', uploadResult);
             }
+          } catch (uploadError) {
+            console.error('❌ Cover image upload failed:', uploadError);
+            console.error('❌ Error details:', {
+              message: uploadError?.message,
+              name: uploadError?.name,
+              stack: uploadError?.stack,
+            });
+            // Continue without cover image
+            coverImageUrl = null;
+          } finally {
+            setUploadingCoverImage(false);
           }
-          
-          // Get file name
-          let fileName = coverImageFile.name;
-          if (!fileName) {
-            const uriParts = normalizedUri.split('/');
-            fileName = uriParts[uriParts.length - 1] || `cover_${Date.now()}.jpg`;
-            fileName = fileName.split('?')[0]; // Remove query params
-            try {
-              fileName = decodeURIComponent(fileName);
-            } catch (e) {
-              // If decoding fails, use as is
-            }
-          }
-          
-          // Get file type
-          const fileType = coverImageFile.type || 'image/jpeg';
-          
-          console.log('📤 Adding cover image to FormData...', {
-            originalUri: coverImageFile.uri.substring(0, 50),
-            normalizedUri: normalizedUri.substring(0, 50),
-            fileName,
-            fileType,
-          });
-          
-          uploadFormData.append('coverImage', {
-            uri: normalizedUri,
-            type: fileType,
-            name: fileName,
-          });
         }
         
-        // Add PDF file if provided (optional)
+        // Step 2: Upload PDF if provided (optional)
         if (pdfFile) {
-          const fileToUpload = pdfFile.file || {
-            uri: pdfFile.uri,
-            type: pdfFile.type || 'application/pdf',
-            name: pdfFile.name || 'book.pdf',
-          };
-          
-          // Normalize URI like uploadFile does (important for React Native)
-          let normalizedUri = fileToUpload.uri;
-          if (!normalizedUri.startsWith('file://') && 
-              !normalizedUri.startsWith('content://') && 
-              !normalizedUri.startsWith('http://') && 
-              !normalizedUri.startsWith('https://')) {
-            // If it's a relative path, make it absolute
-            if (normalizedUri.startsWith('/')) {
-              normalizedUri = 'file://' + normalizedUri;
-            } else {
-              normalizedUri = 'file:///' + normalizedUri;
+          setUploadProgress(40);
+          try {
+            console.log('📤 Uploading PDF separately...');
+            const fileToUpload = pdfFile.file || {
+              uri: pdfFile.uri,
+              type: pdfFile.type || 'application/pdf',
+              name: pdfFile.name || 'book.pdf',
+            };
+            const uploadResult = await apiClient.uploadFile(
+              fileToUpload,
+              'books',
+              'pdfs'
+            );
+            // Safely extract URL
+            if (uploadResult && typeof uploadResult === 'object' && !(uploadResult instanceof Error)) {
+              pdfUrl = ('url' in uploadResult && uploadResult['url']) 
+                ? uploadResult['url'] 
+                : null;
+              if (pdfUrl) {
+                console.log('✅ PDF uploaded:', pdfUrl);
+              }
             }
+          } catch (uploadError) {
+            console.error('⚠️ PDF upload failed (optional):', uploadError);
+            // Continue without PDF
+            pdfUrl = null;
           }
-          
-          // Get file name
-          let fileName = fileToUpload.name;
-          if (!fileName) {
-            const uriParts = normalizedUri.split('/');
-            fileName = uriParts[uriParts.length - 1] || 'book.pdf';
-            fileName = fileName.split('?')[0]; // Remove query params
-            try {
-              fileName = decodeURIComponent(fileName);
-            } catch (e) {
-              // If decoding fails, use as is
-            }
-          }
-          
-          const fileType = fileToUpload.type || 'application/pdf';
-          
-          console.log('📤 Adding PDF to FormData...', {
-            originalUri: fileToUpload.uri?.substring(0, 50),
-            normalizedUri: normalizedUri.substring(0, 50),
-            fileName,
-            fileType,
-          });
-          
-          uploadFormData.append('pdfFile', {
-            uri: normalizedUri,
-            type: fileType,
-            name: fileName,
-          });
         }
         
-        setUploadProgress(30);
-        
-        // Single API call - uploads files and creates book record
+        // Step 3: Create book with metadata and uploaded file URLs
+        setUploadProgress(70);
         try {
-          setUploadProgress(60);
-          
-          // Log what we're sending
-          console.log('📤 Sending book upload request...');
-          console.log('📤 FormData has coverImage:', !!coverImageFile);
-          console.log('📤 FormData has pdfFile:', !!pdfFile);
-          console.log('📤 FormData metadata:', {
+          console.log('📤 Creating book with metadata and file URLs...');
+          const bookData = {
             title: formData.title,
             author_id: userId,
+            summary: formData.description,
+            price: bookPrice,
+            original_price: bookPrice,
+            pages: formData.pages ? parseInt(formData.pages) : null,
+            language: formData.language,
             category_id: formData.category,
+            isbn: formData.isbn || null,
+            is_free: false,
+            published_date: new Date().toISOString(),
+            cover_image_url: coverImageUrl,
+            cover_images: coverImageUrl ? [coverImageUrl] : [],
+            pdf_url: pdfUrl,
+          };
+          
+          console.log('📤 Book data:', {
+            title: bookData.title,
+            hasCoverImage: !!coverImageUrl,
+            hasPdf: !!pdfUrl,
           });
           
-          const result = await apiClient.createBook(null, uploadFormData);
-          console.log('✅ Book created successfully with single API call:', result);
+          const result = await apiClient.createBook(bookData, null); // Use JSON, not FormData
+          console.log('✅ Book created successfully:', result);
           setUploadProgress(100);
-          setUploadingCoverImage(false);
           
-          // Update cover image URI if it was uploaded
-          if (result.book?.cover_image_url) {
-            setCoverImageUri(result.book.cover_image_url);
-          }
-
-          // Build success message
-          let successMessage = 'Book uploaded successfully!';
-          const missingComponents = [];
-          if (!result.book?.cover_image_url && coverImageFile) {
-            missingComponents.push('cover image');
-          }
-          if (!result.book?.pdf_url && pdfFile) {
-            missingComponents.push('PDF');
-          }
-          if (missingComponents.length > 0) {
-            successMessage += `\n\nNote: ${missingComponents.join(' and ')} could not be uploaded due to network issues, but the book was created successfully.`;
-          }
-
           Alert.alert(
             'Success',
-            successMessage,
+            'Book uploaded successfully!',
             [
               {
                 text: 'OK',
@@ -626,15 +586,14 @@ const BookUploadScreen = ({ navigation }) => {
               },
             ]
           );
-        } catch (uploadError) {
-          console.error('Error creating book:', uploadError);
-          setUploadingCoverImage(false);
-          Alert.alert('Error', uploadError.message || 'Failed to upload book. Please try again.');
+        } catch (createError) {
+          console.error('Error creating book:', createError);
+          Alert.alert('Error', createError.message || 'Failed to create book. Please try again.');
         }
       } else if (bookType === 'audio') {
         // Calculate total steps for audio book (files are optional)
         let audioUploadStep = audioFile ? 1 : 0;
-        let imageUploadStep = (coverImageFile && coverImageFile.uri && !coverImageFile.uri.startsWith('http')) ? 1 : 0; // Only upload if new image selected
+        let imageUploadStep = (coverImageFile && coverImageFile.path && !coverImageFile.path.startsWith('http')) ? 1 : 0; // Only upload if new image selected
         let totalSteps = audioUploadStep + imageUploadStep + 1;
         let currentStep = 0;
 
@@ -642,15 +601,20 @@ const BookUploadScreen = ({ navigation }) => {
         let coverImageUrl = coverImageUri && coverImageUri.startsWith('http') ? coverImageUri : null; // Use existing URL if it's already uploaded
 
         // Step 1: Upload cover image if a new one was selected (same pattern as profile screen)
-        if (coverImageFile && coverImageFile.uri && !coverImageFile.uri.startsWith('http')) {
+        if (coverImageFile && coverImageFile.path && !coverImageFile.path.startsWith('http')) {
           setUploadingCoverImage(true);
           setUploadProgress(Math.round((currentStep / totalSteps) * 100));
           try {
+            // Convert to format expected by uploadFile (using path, mime, filename)
+            const fileForUpload = {
+              uri: coverImageFile.path,
+              type: coverImageFile.mime || 'image/jpeg',
+              name: coverImageFile.filename || `cover_${Date.now()}.jpg`,
+            };
             const uploadResult = await apiClient.uploadFile(
-              coverImageFile,
+              fileForUpload,
               'audio-books',
               'covers'
-              // Removed userId parameter to match profile upload pattern
             );
             // Safely extract URL using bracket notation and 'in' operator
             if (uploadResult && typeof uploadResult === 'object' && !(uploadResult instanceof Error)) {

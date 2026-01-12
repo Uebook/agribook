@@ -15,7 +15,7 @@ import {
   Image,
   ActivityIndicator,
 } from 'react-native';
-import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
+import ImagePicker from 'react-native-image-crop-picker';
 import Header from '../../components/common/Header';
 import { userProfile } from '../../services/dummyData';
 import { useAuth } from '../../context/AuthContext';
@@ -278,32 +278,24 @@ const EditProfileScreen = ({ navigation }) => {
       return;
     }
 
-    launchCamera(
-      {
-        mediaType: 'photo',
-        quality: 0.8,
-        maxWidth: 800,
-        maxHeight: 800,
-      },
-      (response) => {
-        if (response.didCancel) {
-          return;
-        }
-        if (response.errorMessage) {
-          Alert.alert('Error', response.errorMessage);
-          return;
-        }
-        if (response.assets && response.assets[0]) {
-          const asset = response.assets[0];
-          setAvatarUri(asset.uri || '');
-          setAvatarFile({
-            uri: asset.uri || '',
-            type: asset.type || 'image/jpeg',
-            name: asset.fileName || `avatar_${Date.now()}.jpg`,
-          });
-        }
+    try {
+      const img = await ImagePicker.openCamera({
+        width: 600,
+        height: 600,
+        cropping: true,
+        compressImageQuality: 0.8,
+      });
+      setAvatarUri(img.path || '');
+      setAvatarFile({
+        path: img.path || '',
+        mime: img.mime || 'image/jpeg',
+        filename: img.filename || `avatar_${Date.now()}.jpg`,
+      });
+    } catch (e) {
+      if (e?.code !== 'E_PICKER_CANCELLED') {
+        Alert.alert('Error', 'Failed to take photo');
       }
-    );
+    }
   }, []);
 
   const selectImageFromGallery = useCallback(async () => {
@@ -315,32 +307,24 @@ const EditProfileScreen = ({ navigation }) => {
       return;
     }
 
-    launchImageLibrary(
-      {
-        mediaType: 'photo',
-        quality: 0.8,
-        maxWidth: 800,
-        maxHeight: 800,
-      },
-      (response) => {
-        if (response.didCancel) {
-          return;
-        }
-        if (response.errorMessage) {
-          Alert.alert('Error', response.errorMessage);
-          return;
-        }
-        if (response.assets && response.assets[0]) {
-          const asset = response.assets[0];
-          setAvatarUri(asset.uri || '');
-          setAvatarFile({
-            uri: asset.uri || '',
-            type: asset.type || 'image/jpeg',
-            name: asset.fileName || `avatar_${Date.now()}.jpg`,
-          });
-        }
+    try {
+      const img = await ImagePicker.openPicker({
+        width: 600,
+        height: 600,
+        cropping: true,
+        compressImageQuality: 0.8,
+      });
+      setAvatarUri(img.path || '');
+      setAvatarFile({
+        path: img.path || '',
+        mime: img.mime || 'image/jpeg',
+        filename: img.filename || `avatar_${Date.now()}.jpg`,
+      });
+    } catch (e) {
+      if (e?.code !== 'E_PICKER_CANCELLED') {
+        Alert.alert('Error', 'Failed to pick image');
       }
-    );
+    }
   }, []);
 
   const handleChangePhoto = useCallback(() => {
@@ -385,12 +369,24 @@ const EditProfileScreen = ({ navigation }) => {
     try {
       // Upload avatar if a new one was selected
       let avatarUrl = avatarUri;
-      if (avatarFile && avatarFile.uri && !avatarFile.uri.startsWith('http')) {
+      if (avatarFile && avatarFile.path && !avatarFile.path.startsWith('http')) {
         // New image selected, upload it
         setUploadingAvatar(true);
         try {
+          // Convert react-native-image-crop-picker format to uploadFile format
+          const fileForUpload = {
+            uri: avatarFile.path, // uploadFile will normalize this
+            type: avatarFile.mime || 'image/jpeg',
+            name: avatarFile.filename || `avatar_${Date.now()}.jpg`,
+          };
+          console.log('📤 Uploading avatar file:', {
+            path: avatarFile.path?.substring(0, 50),
+            mime: avatarFile.mime,
+            filename: avatarFile.filename,
+            converted: fileForUpload,
+          });
           const uploadResult = await apiClient.uploadFile(
-            avatarFile,
+            fileForUpload,
             'avatars',
             'users'
           );
