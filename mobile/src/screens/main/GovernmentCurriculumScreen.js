@@ -85,43 +85,19 @@ const GovernmentCurriculumScreen = ({ navigation }) => {
   };
 
   const handleViewPDF = useCallback((curriculum) => {
-    const pdfUrl = curriculum.pdf_url || curriculum.pdfUrl;
-    if (!pdfUrl) {
-      Alert.alert('Error', 'PDF not available for this curriculum.');
-      return;
-    }
-    // In real app, open PDF viewer or download PDF
-    Alert.alert(
-      'Open PDF',
-      `Would you like to view or download "${curriculum.title}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'View', onPress: () => {
-            // Navigate to PDF viewer or open URL
-            console.log('View PDF:', pdfUrl);
-            // TODO: Implement PDF viewer navigation
-          }
-        },
-        {
-          text: 'Download', onPress: () => {
-            console.log('Download PDF:', pdfUrl);
-            // TODO: Implement PDF download
-          }
-        },
-      ]
-    );
-  }, []);
+    // Navigate to curriculum detail screen
+    navigation.navigate('CurriculumDetail', { curriculumId: curriculum.id });
+  }, [navigation]);
 
   const renderCurriculumItem = useCallback(({ item }) => {
     const bannerUrl = item.banner_url || item.banner;
     const stateName = item.state_name || item.stateName || item.state;
     const publishedDate = item.published_date || item.publishedDate;
-
+    
     return (
       <TouchableOpacity
         style={styles.curriculumCard}
-        onPress={() => handleViewPDF(item)}
+        onPress={() => navigation.navigate('CurriculumDetail', { curriculumId: item.id })}
       >
         {bannerUrl && (
           <Image

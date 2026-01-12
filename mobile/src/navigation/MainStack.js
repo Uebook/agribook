@@ -24,6 +24,7 @@ import EditProfileScreen from '../screens/main/EditProfileScreen';
 import NotificationsScreen from '../screens/main/NotificationsScreen';
 import AudioBookScreen from '../screens/main/AudioBookScreen';
 import GovernmentCurriculumScreen from '../screens/main/GovernmentCurriculumScreen';
+import CurriculumDetailScreen from '../screens/main/CurriculumDetailScreen';
 import EditBookScreen from '../screens/main/EditBookScreen';
 import MyBooksScreen from '../screens/main/MyBooksScreen';
 import FileUploadScreen from '../screens/main/FileUploadScreen';
@@ -112,6 +113,10 @@ const MainStack = () => {
       <Stack.Screen 
         name="GovernmentCurriculum" 
         component={GovernmentCurriculumScreen}
+      />
+      <Stack.Screen 
+        name="CurriculumDetail" 
+        component={CurriculumDetailScreen}
       />
       <Stack.Screen 
         name="EditBook" 
