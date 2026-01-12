@@ -3,6 +3,8 @@
  * Handles all API requests to Next.js API routes
  */
 
+import axios from 'axios';
+
 // API Base URL - Configure based on environment
 // Default: Use Vercel production URL (works on both emulator and physical devices)
 // To use local server: Set USE_LOCAL_SERVER = true
@@ -328,32 +330,17 @@ class ApiClient {
     });
   }
 
-  // Update profile with FormData (supports file upload)
+  // Update profile with FormData (supports file upload) - Using axios
   async updateProfile(formData) {
     const url = `${this.baseUrl}/api/profile/update`;
     
-    console.log('📤 Updating profile:', {
+    console.log('📤 Updating profile with axios:', {
       url,
       baseUrl: this.baseUrl,
       hasFormData: !!formData,
       usingLocalServer: USE_LOCAL_SERVER,
       isDev: __DEV__,
     });
-    
-    // First, test if the endpoint is reachable with a simple OPTIONS request
-    try {
-      console.log('🔍 Testing endpoint connectivity...');
-      const testResponse = await fetch(url, {
-        method: 'OPTIONS',
-        headers: {
-          'Accept': '*/*',
-        },
-      });
-      console.log('✅ Endpoint is reachable, OPTIONS status:', testResponse.status);
-    } catch (testError) {
-      console.warn('⚠️ Endpoint connectivity test failed:', testError.message);
-      // Continue anyway - might be a CORS preflight issue
-    }
     
     // Log FormData structure for debugging
     if (formData._parts) {
@@ -372,170 +359,70 @@ class ApiClient {
     }
     
     try {
-      // Use XMLHttpRequest for FormData (more reliable for file uploads)
-      // Use POST instead of PUT for better React Native compatibility
-      const response = await new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        
-        xhr.open('POST', url);
-        xhr.setRequestHeader('Accept', '*/*');
-        // Do NOT set Content-Type - let React Native FormData set it automatically
-        
-        xhr.onload = () => {
-          const responseText = xhr.responseText;
-          const responseHeaders = new Headers();
-          
-          // Parse response headers
-          const allHeaders = xhr.getAllResponseHeaders();
-          if (allHeaders) {
-            allHeaders.split('\r\n').forEach(line => {
-              const parts = line.split(': ');
-              if (parts.length === 2) {
-                responseHeaders.set(parts[0], parts[1]);
-              }
-            });
-          }
-          
-          console.log('✅ XMLHttpRequest completed:', {
-            status: xhr.status,
-            statusText: xhr.statusText,
-            responseLength: responseText?.length,
-          });
-          
-          resolve({
-            ok: xhr.status >= 200 && xhr.status < 300,
-            status: xhr.status,
-            statusText: xhr.statusText,
-            headers: responseHeaders,
-            text: async () => responseText,
-            json: async () => {
-              try {
-                return JSON.parse(responseText);
-              } catch (e) {
-                throw new Error('Invalid JSON response');
-              }
-            },
-          });
-        };
-        
-        xhr.onerror = (error) => {
-          console.error('❌ XMLHttpRequest onerror:', {
-            readyState: xhr.readyState,
-            status: xhr.status,
-            statusText: xhr.statusText,
-            responseText: xhr.responseText?.substring(0, 200),
-            error: error,
-            url: url,
-            baseUrl: this.baseUrl,
-          });
-          reject(new Error('Network request failed - XMLHttpRequest error'));
-        };
-        
-        xhr.ontimeout = () => {
-          console.error('❌ XMLHttpRequest timeout after 90s');
-          reject(new Error('Request timeout'));
-        };
-        
-        xhr.timeout = 90000; // 90 seconds
-        
-        console.log('📡 Sending XMLHttpRequest POST request to:', url);
-        // Send FormData
-        xhr.send(formData);
+      // Use axios for FormData uploads (more reliable in React Native)
+      const response = await axios.post(url, formData, {
+        headers: {
+          'Accept': '*/*',
+          // Do NOT set Content-Type - axios will automatically set it with boundary for FormData
+        },
+        timeout: 90000, // 90 seconds timeout
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
       });
       
-      if (!response.ok) {
-        let errorData;
-        try {
-          errorData = await response.json();
-        } catch (parseError) {
-          const text = await response.text();
-          errorData = { error: text || 'Request failed' };
-        }
+      console.log('✅ Axios request completed:', {
+        status: response.status,
+        statusText: response.statusText,
+        dataKeys: response.data ? Object.keys(response.data) : [],
+      });
+      
+      return response.data;
+    } catch (error) {
+      console.error('❌ Profile update error (axios):', error);
+      
+      // Enhanced error logging
+      if (error.response) {
+        // Server responded with error status
+        console.error('❌ Server error response:', {
+          status: error.response.status,
+          statusText: error.response.statusText,
+          data: error.response.data,
+        });
         
-        const errorMessage = errorData.error || errorData.message || `HTTP error! status: ${response.status}`;
-        const error = new Error(errorMessage);
-        error.status = response.status;
-        error.details = errorData.details;
+        const errorData = error.response.data || {};
+        const errorMessage = errorData.error || errorData.message || `HTTP error! status: ${error.response.status}`;
+        const axiosError = new Error(errorMessage);
+        axiosError.status = error.response.status;
+        axiosError.details = errorData.details;
+        throw axiosError;
+      } else if (error.request) {
+        // Request was made but no response received
+        console.error('❌ No response received:', {
+          url: url,
+          baseUrl: this.baseUrl,
+          usingLocalServer: USE_LOCAL_SERVER,
+          isDev: __DEV__,
+        });
+        
+        throw new Error(
+          `Network error: Cannot reach ${url}\n\n` +
+          `Please check:\n` +
+          `1. Internet connection\n` +
+          `2. If ${this.baseUrl} is accessible\n` +
+          `3. API server status\n\n` +
+          `Current config: ${USE_LOCAL_SERVER ? 'LOCAL SERVER' : 'VERCEL PRODUCTION'}`
+        );
+      } else {
+        // Error setting up the request
+        console.error('❌ Request setup error:', {
+          message: error.message,
+          url: url,
+          baseUrl: this.baseUrl,
+          stack: error.stack,
+        });
+        
         throw error;
       }
-      
-      return await response.json();
-    } catch (error) {
-      console.error('❌ Profile update error:', error);
-      console.error('Error details:', {
-        name: error.name,
-        message: error.message,
-        url: url,
-        baseUrl: this.baseUrl,
-        usingLocalServer: USE_LOCAL_SERVER,
-        isDev: __DEV__,
-        stack: error.stack,
-      });
-      
-      // Fallback to fetch if XMLHttpRequest fails
-      if (error.message && (error.message.includes('XMLHttpRequest') || error.message.includes('Network request failed'))) {
-        console.warn('⚠️ XMLHttpRequest failed, trying fetch...');
-        try {
-          const fetchResponse = await fetch(url, {
-            method: 'POST',
-            body: formData,
-            headers: {
-              'Accept': '*/*',
-              // Do NOT set Content-Type - React Native FormData sets it automatically
-            },
-          });
-          
-          console.log('✅ Fetch request completed:', {
-            status: fetchResponse.status,
-            statusText: fetchResponse.statusText,
-            ok: fetchResponse.ok,
-          });
-          
-          if (!fetchResponse.ok) {
-            let errorData;
-            try {
-              errorData = await fetchResponse.json();
-            } catch (parseError) {
-              const text = await fetchResponse.text();
-              errorData = { error: text || 'Request failed' };
-            }
-            
-            const errorMessage = errorData.error || errorData.message || `HTTP error! status: ${fetchResponse.status}`;
-            const fetchError = new Error(errorMessage);
-            fetchError.status = fetchResponse.status;
-            fetchError.details = errorData.details;
-            throw fetchError;
-          }
-          
-          return await fetchResponse.json();
-        } catch (fetchError) {
-          console.error('❌ Fetch also failed:', fetchError);
-          console.error('Fetch error details:', {
-            name: fetchError.name,
-            message: fetchError.message,
-            url: url,
-            baseUrl: this.baseUrl,
-            usingLocalServer: USE_LOCAL_SERVER,
-            isDev: __DEV__,
-          });
-          
-          // Provide more helpful error message
-          if (fetchError.message && fetchError.message.includes('Network request failed')) {
-            throw new Error(
-              `Network error: Cannot reach ${url}\n\n` +
-              `Please check:\n` +
-              `1. Internet connection\n` +
-              `2. If ${this.baseUrl} is accessible\n` +
-              `3. API server status\n\n` +
-              `Current config: ${USE_LOCAL_SERVER ? 'LOCAL SERVER' : 'VERCEL PRODUCTION'}`
-            );
-          }
-          
-          throw fetchError;
-        }
-      }
-      
-      throw error;
     }
   }
 
