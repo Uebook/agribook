@@ -7,9 +7,10 @@ export async function GET(request: NextRequest) {
     const supabase = createServerClient();
     const { searchParams } = new URL(request.url);
     const state = searchParams.get('state');
-    // Default to 'active' for security - only show active curriculums unless explicitly requested
+    // Default to 'published' for public access - only show published curriculums unless explicitly requested
     // Admin panel can pass status='all' to see all curriculums
-    const status = searchParams.get('status') || 'active';
+    // Mobile app should use status='published' to see published curriculums
+    const status = searchParams.get('status') || 'published';
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = (page - 1) * limit;

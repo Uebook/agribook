@@ -46,7 +46,7 @@ const GovernmentCurriculumScreen = ({ navigation }) => {
         console.log('📚 GovernmentCurriculumScreen: Fetching curriculums...', { selectedState });
         
         const params = {
-          status: 'active', // API now defaults to 'active', but we explicitly pass it
+          status: 'published', // Show only published curriculums (not pending)
           limit: 100,
         };
         if (selectedState) {
