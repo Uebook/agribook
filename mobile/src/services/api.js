@@ -267,11 +267,12 @@ class ApiClient {
     });
   }
 
-  // Update profile with FormData (supports file upload) - Using axios
+  // Update profile with FormData (supports file upload)
+  // Uses XMLHttpRequest for file uploads (more reliable in React Native) with axios fallback
   async updateProfile(formData) {
     const url = `${this.baseUrl}/api/profile/update`;
     
-    console.log('📤 Updating profile with axios:', {
+    console.log('📤 Updating profile:', {
       url,
       baseUrl: this.baseUrl,
       hasFormData: !!formData,
@@ -297,74 +298,123 @@ class ApiClient {
       })));
     }
     
+    // First, test connectivity with an OPTIONS request (CORS preflight)
     try {
-      // Use axios for FormData uploads (more reliable in React Native)
-      const response = await axios.post(url, formData, {
-        headers: {
-          'Accept': '*/*',
-          // Do NOT set Content-Type - axios will automatically set it with boundary for FormData
-        },
-        timeout: 90000, // 90 seconds timeout
-        maxContentLength: Infinity,
-        maxBodyLength: Infinity,
+      console.log('🔍 Testing endpoint connectivity...');
+      await axios.options(url, {
+        timeout: 5000,
+        validateStatus: () => true, // Don't throw on any status
+      });
+      console.log('✅ Endpoint is reachable');
+    } catch (testError) {
+      console.warn('⚠️ Connectivity test failed, but continuing anyway:', testError.message);
+    }
+    
+    try {
+      // Use XMLHttpRequest for FormData with files (more reliable in React Native)
+      // React Native's XMLHttpRequest handles FormData with file URIs better than axios
+      const response = await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        
+        xhr.open('POST', url);
+        xhr.setRequestHeader('Accept', '*/*');
+        // Do NOT set Content-Type - React Native FormData sets it automatically with boundary
+        
+        xhr.onload = () => {
+          const responseText = xhr.responseText;
+          
+          console.log('✅ XMLHttpRequest completed:', {
+            status: xhr.status,
+            statusText: xhr.statusText,
+            responseLength: responseText?.length,
+          });
+          
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const data = JSON.parse(responseText);
+              resolve(data);
+            } catch (parseError) {
+              reject(new Error('Invalid JSON response from server'));
+            }
+          } else {
+            let errorData;
+            try {
+              errorData = JSON.parse(responseText);
+            } catch (parseError) {
+              errorData = { error: responseText || 'Request failed' };
+            }
+            const error = new Error(errorData.error || errorData.message || `HTTP error! status: ${xhr.status}`);
+            error.status = xhr.status;
+            error.details = errorData.details;
+            reject(error);
+          }
+        };
+        
+        xhr.onerror = (error) => {
+          console.error('❌ XMLHttpRequest onerror:', {
+            readyState: xhr.readyState,
+            status: xhr.status,
+            statusText: xhr.statusText,
+            responseText: xhr.responseText?.substring(0, 200),
+            error: error,
+          });
+          reject(new Error('Network request failed - XMLHttpRequest error'));
+        };
+        
+        xhr.ontimeout = () => {
+          console.error('❌ XMLHttpRequest timeout after 90s');
+          reject(new Error('Request timeout'));
+        };
+        
+        xhr.timeout = 90000; // 90 seconds
+        
+        console.log('📡 Sending XMLHttpRequest POST request to:', url);
+        xhr.send(formData);
       });
       
-      console.log('✅ Axios request completed:', {
-        status: response.status,
-        statusText: response.statusText,
-        dataKeys: response.data ? Object.keys(response.data) : [],
-      });
+      console.log('✅ Profile update successful');
+      return response;
+    } catch (xhrError) {
+      console.warn('⚠️ XMLHttpRequest failed, trying axios fallback...', xhrError.message);
       
-      return response.data;
-    } catch (error) {
-      console.error('❌ Profile update error (axios):', error);
-      
-      // Enhanced error logging
-      if (error.response) {
-        // Server responded with error status
-        console.error('❌ Server error response:', {
-          status: error.response.status,
-          statusText: error.response.statusText,
-          data: error.response.data,
+      // Fallback to axios if XMLHttpRequest fails
+      try {
+        const response = await axios.post(url, formData, {
+          headers: {
+            'Accept': '*/*',
+            // Do NOT set Content-Type - axios will automatically set it with boundary for FormData
+          },
+          timeout: 90000,
+          maxContentLength: Infinity,
+          maxBodyLength: Infinity,
         });
         
-        const errorData = error.response.data || {};
-        const errorMessage = errorData.error || errorData.message || `HTTP error! status: ${error.response.status}`;
-        const axiosError = new Error(errorMessage);
-        axiosError.status = error.response.status;
-        axiosError.details = errorData.details;
-        throw axiosError;
-      } else if (error.request) {
-        // Request was made but no response received
-        console.error('❌ No response received:', {
-          url: url,
-          baseUrl: this.baseUrl,
-          usingLocalServer: USE_LOCAL_SERVER,
-          isDev: __DEV__,
-          errorCode: error.code,
-          errorMessage: error.message,
-        });
+        console.log('✅ Axios fallback successful');
+        return response.data;
+      } catch (axiosError) {
+        console.error('❌ Both XMLHttpRequest and axios failed');
         
-        throw new Error(
-          `Network error: Cannot reach ${url}\n\n` +
-          `Please check:\n` +
-          `1. Internet connection\n` +
-          `2. If ${this.baseUrl} is accessible\n` +
-          `3. API server status\n\n` +
-          `Current config: ${USE_LOCAL_SERVER ? 'LOCAL SERVER' : 'VERCEL PRODUCTION'}`
-        );
-      } else if (error.code === 'ECONNABORTED') {
-        throw new Error(`Request timeout: ${url}. The request took too long (90s).`);
-      } else {
-        // Error setting up the request
-        console.error('❌ Request setup error:', {
-          message: error.message,
-          url: url,
-          baseUrl: this.baseUrl,
-          stack: error.stack,
-        });
+        if (axiosError.response) {
+          const errorData = axiosError.response.data || {};
+          const errorMessage = errorData.error || errorData.message || `HTTP error! status: ${axiosError.response.status}`;
+          const error = new Error(errorMessage);
+          error.status = axiosError.response.status;
+          error.details = errorData.details;
+          throw error;
+        } else if (axiosError.request || xhrError.message.includes('Network')) {
+          throw new Error(
+            `Network error: Cannot reach ${url}\n\n` +
+            `Please check:\n` +
+            `1. Internet connection\n` +
+            `2. If ${this.baseUrl} is accessible\n` +
+            `3. API server status\n\n` +
+            `Current config: ${USE_LOCAL_SERVER ? 'LOCAL SERVER' : 'VERCEL PRODUCTION'}`
+          );
+        } else if (axiosError.code === 'ECONNABORTED') {
+          throw new Error(`Request timeout: ${url}. The request took too long (90s).`);
+        }
         
-        throw error;
+        throw xhrError; // Throw the original XMLHttpRequest error
       }
     }
   }
