@@ -401,6 +401,18 @@ const EditProfileScreen = ({ navigation }) => {
       formPayload.append('pincode', formData.pincode?.trim() || '');
       formPayload.append('website', formData.website?.trim() || '');
 
+      // Validate user_id is a UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(targetUserId)) {
+        throw new Error(`Invalid user ID format. Expected UUID, got: ${targetUserId}. Please log in again.`);
+      }
+
+      console.log('📝 Profile update request:', {
+        userId: targetUserId,
+        hasAvatar: !!(avatarFile && avatarFile.path && !avatarFile.path.startsWith('http')),
+        formDataKeys: formPayload._parts ? formPayload._parts.map(p => p[0]) : [],
+      });
+
       // Strategy: If no profile picture, use the simpler updateUser endpoint
       // If profile picture exists, use the FormData endpoint
       let response;
@@ -413,9 +425,11 @@ const EditProfileScreen = ({ navigation }) => {
           name: avatarFile.filename || `profile_${Date.now()}.jpg`,
         });
         
+        console.log('📤 Calling updateProfile with FormData (includes image)');
         // API call with FormData
         response = await apiClient.updateProfile(formPayload);
       } else {
+        console.log('📤 Calling updateUser with JSON (no image)');
         // No profile picture - use simpler JSON endpoint
         const updatePayload = {
           name: formData.name.trim(),
@@ -462,8 +476,26 @@ const EditProfileScreen = ({ navigation }) => {
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
     } catch (error) {
-      console.error('Profile update error:', error);
-      const errorMessage = error.message || error.error || 'Failed to update profile. Please try again.';
+      console.error('❌ Profile update error:', error);
+      console.error('Error details:', {
+        name: error.name,
+        message: error.message,
+        status: error.status,
+        details: error.details,
+        stack: error.stack,
+      });
+      
+      let errorMessage = error.message || error.error || 'Failed to update profile. Please try again.';
+      
+      // Provide more helpful error messages
+      if (error.message && error.message.includes('Network request failed')) {
+        errorMessage = `Network error: Cannot reach the server.\n\nPlease check:\n1. Internet connection\n2. Try again in a moment\n3. If problem persists, restart the app`;
+      } else if (error.message && error.message.includes('Invalid user ID')) {
+        errorMessage = error.message;
+      } else if (error.details) {
+        errorMessage = `${error.message}\n\nDetails: ${error.details}`;
+      }
+      
       Alert.alert('Error', errorMessage);
     } finally {
       setLoading(false);
