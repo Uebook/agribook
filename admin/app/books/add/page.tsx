@@ -26,6 +26,7 @@ export default function AddBookPage() {
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [pdfPreview, setPdfPreview] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  const [loadingCategories, setLoadingCategories] = useState(true);
   const [authors, setAuthors] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -43,12 +44,16 @@ export default function AddBookPage() {
 
       try {
         // Fetch categories from database
+        setLoadingCategories(true);
         const categoriesResponse = await apiClient.getCategories({ limit: 100 });
+        console.log('📚 Fetched categories:', categoriesResponse.categories?.length || 0);
         setCategories(categoriesResponse.categories || []);
       } catch (error) {
         console.error('Error fetching categories:', error);
         // Fallback to empty array if fetch fails
         setCategories([]);
+      } finally {
+        setLoadingCategories(false);
       }
     };
     fetchData();
@@ -226,15 +231,20 @@ export default function AddBookPage() {
                     onChange={handleInputChange}
                     required
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    disabled={categories.length === 0}
+                    disabled={loadingCategories || categories.length === 0}
                   >
                     <option value="">
-                      {categories.length === 0 ? 'Loading categories...' : 'Select Category'}
+                      {loadingCategories ? 'Loading categories...' : categories.length === 0 ? 'No categories available' : 'Select Category'}
                     </option>
                     {categories.map(cat => (
                       <option key={cat.id} value={cat.id}>{cat.name}</option>
                     ))}
                   </select>
+                  {!loadingCategories && categories.length === 0 && (
+                    <p className="text-xs text-red-500 mt-1">
+                      No categories found. Please create categories in the Categories section.
+                    </p>
+                  )}
                 </div>
 
                 <div>
