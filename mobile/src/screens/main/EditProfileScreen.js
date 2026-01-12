@@ -128,9 +128,29 @@ const EditProfileScreen = ({ navigation, route }) => {
 
       // Upload to Supabase first if new avatar selected
       if (avatarFile?.path) {
-        console.log('📤 Uploading avatar to Supabase...');
-        avatarUrl = await uploadAvatarToSupabase(avatarFile, user.id);
-        console.log('✅ Avatar uploaded, URL:', avatarUrl?.substring(0, 50) + '...');
+        if (!supabase) {
+          Alert.alert(
+            'Configuration Error',
+            'Supabase is not configured. Profile will be updated without image.\n\nPlease configure Supabase in mobile/src/lib/supabase.js',
+            [{ text: 'Continue Without Image', onPress: () => {} }]
+          );
+          // Continue without image upload
+        } else {
+          try {
+            console.log('📤 Uploading avatar to Supabase...');
+            avatarUrl = await uploadAvatarToSupabase(avatarFile, user.id);
+            console.log('✅ Avatar uploaded, URL:', avatarUrl?.substring(0, 50) + '...');
+          } catch (uploadError) {
+            console.error('❌ Avatar upload failed:', uploadError);
+            Alert.alert(
+              'Upload Failed',
+              'Failed to upload image. Profile will be updated without image.',
+              [{ text: 'Continue', onPress: () => {} }]
+            );
+            // Continue without image - use existing avatarUri or null
+            avatarUrl = avatarUri;
+          }
+        }
       }
 
       // Call API with JSON only (no FormData)
