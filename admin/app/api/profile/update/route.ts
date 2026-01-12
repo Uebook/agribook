@@ -84,7 +84,7 @@ export async function PUT(request: NextRequest) {
     // Handle profile picture upload if provided
     let profilePictureUrl: string | null = null;
     
-    if (profilePicture && profilePicture !== 'null' && profilePicture !== 'undefined') {
+    if (profilePicture && profilePicture instanceof File) {
       console.log('📤 Uploading profile picture...');
       
       try {
