@@ -29,14 +29,34 @@ let supabase = null;
 
 if (isValidConfig) {
   try {
+    console.log('🔧 Initializing Supabase client...', {
+      url: SUPABASE_URL.substring(0, 30) + '...',
+      hasKey: !!SUPABASE_ANON_KEY,
+      keyLength: SUPABASE_ANON_KEY?.length,
+    });
+    
     supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     console.log('✅ Supabase client initialized successfully');
   } catch (error) {
     console.error('❌ Error initializing Supabase client:', error);
+    console.error('Error details:', {
+      message: error?.message,
+      stack: error?.stack,
+      url: SUPABASE_URL,
+      hasKey: !!SUPABASE_ANON_KEY,
+    });
     supabase = null;
   }
 } else {
-  console.warn('⚠️ Supabase not configured. Please update SUPABASE_URL and SUPABASE_ANON_KEY in mobile/src/lib/supabase.js');
+  console.warn('⚠️ Supabase not configured. Validation failed:', {
+    hasUrl: !!SUPABASE_URL,
+    urlIsPlaceholder: SUPABASE_URL === 'https://YOUR_PROJECT_ID.supabase.co',
+    urlStartsWithHttps: SUPABASE_URL?.startsWith('https://'),
+    hasKey: !!SUPABASE_ANON_KEY,
+    keyIsPlaceholder: SUPABASE_ANON_KEY === 'YOUR_PUBLIC_ANON_KEY',
+    keyLength: SUPABASE_ANON_KEY?.length,
+  });
+  console.warn('⚠️ Please update SUPABASE_URL and SUPABASE_ANON_KEY in mobile/src/lib/supabase.js');
 }
 
 export default supabase;
