@@ -113,9 +113,13 @@ export async function PUT(request: NextRequest) {
         }
         
         // Generate unique file name
+        // Path structure: {userId}/{timestamp}-{fileName}
+        // Don't include 'avatars' in path since bucket is already 'avatars'
         const timestamp = Date.now();
         const fileExt = fileName.split('.').pop() || 'jpg';
-        const uniqueFileName = `avatars/${targetUserId}/${timestamp}-${fileName}`;
+        const uniqueFileName = `${targetUserId}/${timestamp}-${fileName}`;
+        
+        console.log('📤 Uploading to bucket "avatars" with path:', uniqueFileName);
         
         // Upload to Supabase Storage
         const { data: uploadData, error: uploadError } = await supabase.storage
@@ -127,9 +131,18 @@ export async function PUT(request: NextRequest) {
           });
         
         if (uploadError) {
-          console.error('Error uploading profile picture:', uploadError);
+          console.error('❌ Error uploading profile picture:', uploadError);
+          console.error('Upload error details:', {
+            message: uploadError.message,
+            statusCode: (uploadError as any).statusCode,
+            error: uploadError,
+            path: uniqueFileName,
+            bucket: 'avatars',
+          });
           // Continue without profile picture - don't fail the entire update
         } else {
+          console.log('✅ File uploaded successfully to path:', uniqueFileName);
+          
           // Get public URL
           const { data: urlData } = supabase.storage
             .from('avatars')
@@ -141,7 +154,12 @@ export async function PUT(request: NextRequest) {
             .createSignedUrl(uniqueFileName, 31536000); // 1 year expiry
           
           profilePictureUrl = signedUrlData?.signedUrl || urlData.publicUrl;
-          console.log('✅ Profile picture uploaded:', profilePictureUrl?.substring(0, 50) + '...');
+          console.log('✅ Profile picture uploaded successfully:', {
+            path: uniqueFileName,
+            publicUrl: urlData.publicUrl?.substring(0, 50) + '...',
+            signedUrl: signedUrlData?.signedUrl?.substring(0, 50) + '...',
+            finalUrl: profilePictureUrl?.substring(0, 50) + '...',
+          });
         }
       } catch (uploadError: any) {
         console.error('Error processing profile picture:', uploadError);
