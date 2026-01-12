@@ -93,7 +93,7 @@ const GovernmentCurriculumScreen = ({ navigation }) => {
     const bannerUrl = item.banner_url || item.banner;
     const stateName = item.state_name || item.stateName || item.state;
     const publishedDate = item.published_date || item.publishedDate;
-    
+
     return (
       <TouchableOpacity
         style={styles.curriculumCard}
