@@ -13,6 +13,7 @@ import {
   FlatList,
   Image,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import Colors from '../../../color';
@@ -32,6 +33,7 @@ const HomeScreen = ({ navigation }) => {
   const [allBooks, setAllBooks] = useState([]);
   const [allAudioBooks, setAllAudioBooks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [userRating, setUserRating] = useState(0);
   
@@ -39,9 +41,13 @@ const HomeScreen = ({ navigation }) => {
   const safeUserData = userData || {};
 
   // Fetch books, audio books, notifications, and user data from API
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (isRefresh = false) => {
     try {
-      setLoading(true);
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
       
       // For authors: fetch only their own books (all statuses)
       // For readers: fetch all published books
@@ -94,8 +100,14 @@ const HomeScreen = ({ navigation }) => {
       setAllAudioBooks([]);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [isAuthor, userId]);
+
+  // Handle pull-to-refresh
+  const onRefresh = useCallback(() => {
+    fetchData(true);
+  }, [fetchData]);
 
   // Fetch data on mount
   useEffect(() => {
@@ -684,7 +696,17 @@ const HomeScreen = ({ navigation }) => {
   });
 
   return (
-    <ScrollView style={dynamicStyles.container}>
+    <ScrollView 
+      style={dynamicStyles.container}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={[themeColors.primary.main]}
+          tintColor={themeColors.primary.main}
+        />
+      }
+    >
       {/* Header with Search */}
       <View style={dynamicStyles.header}>
         <View style={styles.headerTop}>
