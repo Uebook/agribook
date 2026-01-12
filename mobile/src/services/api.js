@@ -204,21 +204,39 @@ class ApiClient {
         
         // Re-throw with more context if it's a network error
         if (error.name === 'AbortError') {
-          throw new Error(`Request timeout: ${url}. The request took too long. Try with smaller files.`);
+          throw new Error(`Request timeout: ${url}. The request took too long (120s). Try with smaller files or check Vercel function timeout.`);
         }
         
-        if (error.message === 'Network request failed' || error.name === 'TypeError') {
+        // Check if it's a network error or fetch error
+        const isNetworkError = error.message === 'Network request failed' || 
+                              error.name === 'TypeError' ||
+                              error.message?.includes('fetch') ||
+                              error.message?.includes('Network');
+        
+        if (isNetworkError) {
+          // Try to get more details about the error
+          const errorDetails = {
+            name: error.name,
+            message: error.message,
+            stack: error.stack?.substring(0, 200),
+          };
+          
+          console.error('🔴 Network Error Details:', errorDetails);
+          
           const networkError = new Error(
             `Network error: Cannot reach the server at ${url}\n\n` +
+            `Error: ${error.message}\n` +
             `Current configuration: ${this.baseUrl.includes('localhost') ? 'LOCAL' : 'VERCEL PRODUCTION'}\n\n` +
             `Troubleshooting:\n` +
             `1. Check internet connection\n` +
             `2. Check if ${this.baseUrl} is accessible\n` +
-            `3. For Vercel: Verify ${this.baseUrl} is accessible\n` +
+            `3. For Vercel: Check function logs at vercel.com/dashboard\n` +
             `4. Try uploading without files first to test connection\n` +
-            `5. Check Vercel function logs for errors`
+            `5. Request might be too large - try smaller files\n` +
+            `6. Check Vercel function timeout (max 10s on Hobby plan)`
           );
           networkError.originalError = error;
+          networkError.details = errorDetails;
           throw networkError;
         }
         

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/client';
 
+// Increase function timeout for file uploads (max 60s on Pro plan, 10s on Hobby)
+export const maxDuration = 60;
+
 // Helper function to upload file to Supabase Storage (handles React Native files)
 // Uses the same robust file handling as /api/upload
 async function uploadFileToStorage(
@@ -413,9 +416,19 @@ export async function GET(request: NextRequest) {
 
 // POST /api/books - Create new book (supports both FormData with files and JSON)
 export async function POST(request: NextRequest) {
+  const startTime = Date.now();
+  console.log('📥 POST /api/books - Request received at:', new Date().toISOString());
+  
   try {
     const supabase = createServerClient();
     const contentType = request.headers.get('content-type') || '';
+    
+    console.log('📥 Request headers:', {
+      contentType,
+      contentLength: request.headers.get('content-length'),
+      userAgent: request.headers.get('user-agent')?.substring(0, 50),
+      origin: request.headers.get('origin'),
+    });
     
     // Check if request is FormData (multipart) or JSON
     const isFormData = contentType.includes('multipart') || contentType.includes('form-data');
@@ -838,6 +851,9 @@ export async function POST(request: NextRequest) {
       // Not critical, continue
     }
 
+    const duration = Date.now() - startTime;
+    console.log(`✅ POST /api/books - Success in ${duration}ms`);
+    
     const response = NextResponse.json({ book }, { status: 201 });
     // Add CORS headers to success response
     Object.entries(getCorsHeaders()).forEach(([key, value]) => {
@@ -845,7 +861,8 @@ export async function POST(request: NextRequest) {
     });
     return response;
   } catch (error: any) {
-    console.error('Error in POST /api/books:', error);
+    const duration = Date.now() - startTime;
+    console.error(`❌ POST /api/books - Error after ${duration}ms:`, error);
     const errorResponse = NextResponse.json(
       { error: 'Internal server error', details: error.message },
       { status: 500 }
