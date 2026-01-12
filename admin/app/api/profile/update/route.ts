@@ -22,7 +22,7 @@ export async function OPTIONS(request: NextRequest) {
   });
 }
 
-// PUT /api/profile/update - Update user profile with FormData (supports file upload)
+// PUT /api/profile/update - Update user profile with JSON (avatar_url from Supabase)
 // Also support POST for better React Native compatibility
 export async function PUT(request: NextRequest) {
   return handleProfileUpdate(request);
@@ -43,8 +43,24 @@ async function handleProfileUpdate(request: NextRequest) {
       isJSON: contentType.includes('application/json'),
     });
     
-    // Parse JSON body (no more FormData)
-    const body = await request.json();
+    // Parse JSON body (no more FormData - mobile app uploads directly to Supabase)
+    let body: any;
+    try {
+      body = await request.json();
+    } catch (parseError) {
+      const errorResponse = NextResponse.json(
+        {
+          success: false,
+          error: 'Invalid JSON body',
+          details: 'Request body must be valid JSON',
+        },
+        { status: 400 }
+      );
+      Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+        errorResponse.headers.set(key, value);
+      });
+      return errorResponse;
+    }
     
     // Extract fields from JSON body
     const userId = body.user_id as string | null;
@@ -233,7 +249,7 @@ async function handleProfileUpdate(request: NextRequest) {
       message: 'Profile updated successfully',
       data: {
         ...updatedUser,
-        profile_picture: updatedUser.avatar_url || profilePictureUrl,
+        profile_picture: updatedUser.avatar_url || avatarUrl,
       },
     });
     
