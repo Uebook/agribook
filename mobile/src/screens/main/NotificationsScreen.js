@@ -271,6 +271,12 @@ const NotificationsScreen = ({ navigation }) => {
           {!item.isRead && <View style={styles.unreadDot} />}
         </View>
         <Text style={styles.notificationMessage}>{item.message}</Text>
+        {/* Show book details if available in action params */}
+        {item.action?.params?.bookId && (
+          <Text style={[styles.notificationMessage, { fontSize: 12 * fontSizeMultiplier, fontStyle: 'italic', marginTop: 4 }]}>
+            Tap to view book details
+          </Text>
+        )}
         <Text style={styles.notificationTime}>{item.timestamp}</Text>
       </View>
       {!item.isRead && (

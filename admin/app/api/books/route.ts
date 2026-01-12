@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/client';
+import { notifyCustomersAboutNewBook } from '@/lib/utils/notifications';
 
 // Increase function timeout for file uploads (max 60s on Pro plan, 10s on Hobby)
 export const maxDuration = 60;
@@ -849,6 +850,17 @@ export async function POST(request: NextRequest) {
     } catch (rpcError) {
       console.warn('Could not increment author books count:', rpcError);
       // Not critical, continue
+    }
+
+    // Send notifications if book is published directly (admin upload)
+    if (initialStatus === 'published' && book) {
+      const authorName = (book.author as any)?.name || 'Unknown Author';
+      const bookTitle = book.title;
+      
+      // Notify all customers about new book
+      notifyCustomersAboutNewBook(bookTitle, authorName, book.id).catch((err) => {
+        console.error('Error notifying customers about new book:', err);
+      });
     }
 
     const duration = Date.now() - startTime;

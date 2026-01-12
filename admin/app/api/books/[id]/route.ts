@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/client';
+import {
+  notifyCustomersAboutVerifiedBook,
+  notifyAuthorAboutBookVerification,
+} from '@/lib/utils/notifications';
 
 // GET /api/books/:id - Get single book by ID
 export async function GET(
@@ -88,6 +92,13 @@ export async function PUT(
     if (status !== undefined) updateData.status = status;
     updateData.updated_at = new Date().toISOString();
 
+    // Get current book data to check status change
+    const { data: currentBook } = await supabase
+      .from('books')
+      .select('status, author_id, title')
+      .eq('id', id)
+      .single();
+
     const { data: updatedBook, error } = await supabase
       .from('books')
       .update(updateData)
@@ -105,6 +116,25 @@ export async function PUT(
         { error: 'Failed to update book' },
         { status: 500 }
       );
+    }
+
+    // Send notifications if status changed to 'published'
+    if (status === 'published' && currentBook?.status !== 'published') {
+      const authorName = (updatedBook.author as any)?.name || 'Unknown Author';
+      const bookTitle = updatedBook.title;
+      const authorId = updatedBook.author_id;
+
+      // Notify all customers about verified book
+      notifyCustomersAboutVerifiedBook(bookTitle, authorName, id).catch((err) => {
+        console.error('Error notifying customers:', err);
+      });
+
+      // Notify author about verification
+      if (authorId) {
+        notifyAuthorAboutBookVerification(authorId, bookTitle, id).catch((err) => {
+          console.error('Error notifying author:', err);
+        });
+      }
     }
 
     return NextResponse.json({ book: updatedBook });
