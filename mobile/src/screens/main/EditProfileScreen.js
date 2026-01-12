@@ -44,24 +44,42 @@ const EditProfileScreen = ({ navigation, route }) => {
   useEffect(() => {
     const checkSupabase = async () => {
       try {
+        console.log('🔍 Checking Supabase connection status...');
+        console.log('📦 Supabase import:', {
+          isNull: supabase === null,
+          isUndefined: supabase === undefined,
+          type: typeof supabase,
+          value: supabase,
+        });
+
         if (supabase) {
           // Try to access storage to verify connection
           const hasStorage = !!supabase.storage;
+          const hasAuth = !!supabase.auth;
+          
           setSupabaseStatus({
-            connected: hasStorage,
+            connected: hasStorage && hasAuth,
             checking: false,
           });
-          console.log('📊 Supabase Status Check:', {
-            connected: hasStorage,
+          
+          console.log('✅ Supabase Status Check:', {
+            connected: hasStorage && hasAuth,
             hasClient: !!supabase,
             hasStorage: hasStorage,
+            hasAuth: hasAuth,
+            clientType: typeof supabase,
           });
         } else {
           setSupabaseStatus({
             connected: false,
             checking: false,
           });
-          console.log('📊 Supabase Status: NOT CONNECTED (supabase is null)');
+          console.error('❌ Supabase Status: NOT CONNECTED');
+          console.error('📊 Details:', {
+            supabaseIsNull: supabase === null,
+            supabaseIsUndefined: supabase === undefined,
+            supabaseType: typeof supabase,
+          });
         }
       } catch (error) {
         console.error('❌ Error checking Supabase status:', error);
@@ -72,7 +90,12 @@ const EditProfileScreen = ({ navigation, route }) => {
       }
     };
 
-    checkSupabase();
+    // Small delay to ensure module is fully loaded
+    const timer = setTimeout(() => {
+      checkSupabase();
+    }, 100);
+
+    return () => clearTimeout(timer);
   }, []);
   // useEffect(() => {
   //   fetch('https://admin-orcin-omega.vercel.app')
@@ -245,6 +268,22 @@ const EditProfileScreen = ({ navigation, route }) => {
   return (
     <View style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Supabase Connection Status Banner */}
+        <View style={[
+          styles.statusBanner,
+          supabaseStatus.connected ? styles.statusConnected : styles.statusDisconnected
+        ]}>
+          <Text style={styles.statusText}>
+            {supabaseStatus.checking ? (
+              '🔄 Checking Supabase connection...'
+            ) : supabaseStatus.connected ? (
+              '✅ Supabase Connected - Image uploads enabled'
+            ) : (
+              '❌ Supabase Not Connected - Image uploads disabled'
+            )}
+          </Text>
+        </View>
+
         <View style={styles.card}>
 
           <TouchableOpacity style={styles.avatarWrap} onPress={changePhoto}>
@@ -328,6 +367,28 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F3F4F6',
+  },
+  statusBanner: {
+    margin: 16,
+    marginBottom: 8,
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  statusConnected: {
+    backgroundColor: '#D1FAE5',
+    borderWidth: 1,
+    borderColor: '#10B981',
+  },
+  statusDisconnected: {
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#EF4444',
+  },
+  statusText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1F2937',
   },
   card: {
     margin: 16,
