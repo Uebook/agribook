@@ -234,13 +234,51 @@ async function handleProfileUpdate(request: NextRequest) {
       updateData,
     });
     
+    // First, check if user exists
+    const { data: existingUser, error: checkError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('id', targetUserId)
+      .maybeSingle();
+    
+    if (checkError && checkError.code !== 'PGRST116') {
+      console.error('Error checking user existence:', checkError);
+      const errorResponse = NextResponse.json(
+        {
+          success: false,
+          error: 'Failed to check user',
+          details: checkError.message || 'Unknown error',
+        },
+        { status: 500 }
+      );
+      Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+        errorResponse.headers.set(key, value);
+      });
+      return errorResponse;
+    }
+    
+    if (!existingUser) {
+      const errorResponse = NextResponse.json(
+        {
+          success: false,
+          error: 'User not found',
+          details: `No user found with ID: ${targetUserId}`,
+        },
+        { status: 404 }
+      );
+      Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+        errorResponse.headers.set(key, value);
+      });
+      return errorResponse;
+    }
+    
     // Update user in database
     const { data: updatedUser, error: updateError } = await supabase
       .from('users')
       .update(updateData)
       .eq('id', targetUserId)
       .select()
-      .single();
+      .maybeSingle();
     
     if (updateError) {
       console.error('Error updating user profile:', updateError);
@@ -262,7 +300,8 @@ async function handleProfileUpdate(request: NextRequest) {
       const errorResponse = NextResponse.json(
         {
           success: false,
-          error: 'User not found',
+          error: 'User not found after update',
+          details: `User with ID ${targetUserId} was not found after update operation`,
         },
         { status: 404 }
       );
