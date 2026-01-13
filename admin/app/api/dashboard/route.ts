@@ -87,45 +87,31 @@ export async function GET(request: NextRequest) {
           totalGST = bookPayments.reduce((sum, p) => sum + (parseFloat(String(p.gst_amount)) || 0), 0);
           totalAuthorEarnings = bookPayments.reduce((sum, p) => sum + (parseFloat(String(p.author_earnings)) || 0), 0);
           
-          // Calculate author revenue (group by author) - batch queries for efficiency
+          // Calculate author revenue (group by author) - use author_earnings from payments
           const authorRevenueMap = new Map();
-          const bookIds = [...new Set(successfulPayments.map(p => p.book_id).filter(Boolean))];
-          const audioBookIds = [...new Set(successfulPayments.map(p => p.audio_book_id).filter(Boolean))];
-          
-          // Batch fetch books
-          if (bookIds.length > 0) {
-            const { data: books } = await supabase
-              .from('books')
-              .select('id, author_id')
-              .in('id', bookIds);
-            
-            if (books) {
-              const bookAuthorMap = new Map(books.map(b => [b.id, b.author_id]));
-              for (const payment of successfulPayments) {
-                if (payment.book_id && bookAuthorMap.has(payment.book_id)) {
-                  const authorId = bookAuthorMap.get(payment.book_id);
-                  const current = authorRevenueMap.get(authorId) || 0;
-                  authorRevenueMap.set(authorId, current + (parseFloat(String(payment.amount)) || 0));
-                }
+          for (const payment of bookPayments) {
+            if (payment.author_earnings && payment.author_earnings > 0) {
+              // Get author_id from payment or from book/audio_book
+              let authorId = null;
+              if (payment.book_id) {
+                const { data: book } = await supabase
+                  .from('books')
+                  .select('author_id')
+                  .eq('id', payment.book_id)
+                  .single();
+                authorId = book?.author_id;
+              } else if (payment.audio_book_id) {
+                const { data: audioBook } = await supabase
+                  .from('audio_books')
+                  .select('author_id')
+                  .eq('id', payment.audio_book_id)
+                  .single();
+                authorId = audioBook?.author_id;
               }
-            }
-          }
-          
-          // Batch fetch audio books
-          if (audioBookIds.length > 0) {
-            const { data: audioBooks } = await supabase
-              .from('audio_books')
-              .select('id, author_id')
-              .in('id', audioBookIds);
-            
-            if (audioBooks) {
-              const audioBookAuthorMap = new Map(audioBooks.map(ab => [ab.id, ab.author_id]));
-              for (const payment of successfulPayments) {
-                if (payment.audio_book_id && audioBookAuthorMap.has(payment.audio_book_id)) {
-                  const authorId = audioBookAuthorMap.get(payment.audio_book_id);
-                  const current = authorRevenueMap.get(authorId) || 0;
-                  authorRevenueMap.set(authorId, current + (parseFloat(String(payment.amount)) || 0));
-                }
+              
+              if (authorId) {
+                const current = authorRevenueMap.get(authorId) || 0;
+                authorRevenueMap.set(authorId, current + (parseFloat(String(payment.author_earnings)) || 0));
               }
             }
           }
@@ -158,9 +144,6 @@ export async function GET(request: NextRequest) {
       console.warn('Could not fetch payments:', paymentsError);
       // Continue with default values
     }
-
-    // Calculate platform profit (commission - GST is already deducted from gross)
-    const platformProfit = totalPlatformCommission;
 
     // Calculate platform profit (commission - GST is already deducted from gross)
     const platformProfit = totalPlatformCommission;
