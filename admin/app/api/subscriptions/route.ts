@@ -1,6 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/client';
 
+// CORS headers helper
+function getCorsHeaders() {
+  return {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Accept, Authorization',
+    'Access-Control-Max-Age': '86400',
+  };
+}
+
+// Handle OPTIONS request for CORS
+export async function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, {
+    status: 200,
+    headers: getCorsHeaders(),
+  });
+}
+
 // GET /api/subscriptions - Get all subscription types
 export async function GET(request: NextRequest) {
   try {
@@ -8,6 +26,7 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
     const type = searchParams.get('type'); // Filter by type: 'monthly' or 'per_book'
+    const isActive = searchParams.get('is_active'); // Filter by active status
 
     const supabase = createServerClient();
     const offset = (page - 1) * limit;
@@ -21,18 +40,27 @@ export async function GET(request: NextRequest) {
       query = query.eq('type', type);
     }
 
+    if (isActive !== null && isActive !== undefined) {
+      const isActiveBool = isActive === 'true' || isActive === '1';
+      query = query.eq('is_active', isActiveBool);
+    }
+
     const { data: subscriptionTypes, error, count } = await query
       .range(offset, offset + limit - 1);
 
     if (error) {
       console.error('Error fetching subscription types:', error);
-      return NextResponse.json(
+      const errorResponse = NextResponse.json(
         { error: 'Failed to fetch subscription types', details: error.message },
         { status: 500 }
       );
+      Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+        errorResponse.headers.set(key, value);
+      });
+      return errorResponse;
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       subscriptionTypes: subscriptionTypes || [],
       pagination: {
         page,
@@ -41,12 +69,22 @@ export async function GET(request: NextRequest) {
         totalPages: Math.ceil((count || 0) / limit),
       },
     });
+
+    Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+      response.headers.set(key, value);
+    });
+
+    return response;
   } catch (error: any) {
     console.error('Error in GET /api/subscriptions:', error);
-    return NextResponse.json(
+    const errorResponse = NextResponse.json(
       { error: 'Internal server error', details: error.message },
       { status: 500 }
     );
+    Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+      errorResponse.headers.set(key, value);
+    });
+    return errorResponse;
   }
 }
 
@@ -57,17 +95,25 @@ export async function POST(request: NextRequest) {
     const { name, type, description, price, duration_days, is_active, features } = body;
 
     if (!name || !type || price === undefined) {
-      return NextResponse.json(
+      const errorResponse = NextResponse.json(
         { error: 'name, type, and price are required' },
         { status: 400 }
       );
+      Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+        errorResponse.headers.set(key, value);
+      });
+      return errorResponse;
     }
 
     if (type !== 'monthly') {
-      return NextResponse.json(
+      const errorResponse = NextResponse.json(
         { error: 'type must be "monthly" (Per Book Pay is the default, no subscription needed)' },
         { status: 400 }
       );
+      Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+        errorResponse.headers.set(key, value);
+      });
+      return errorResponse;
     }
 
     const supabase = createServerClient();
@@ -88,21 +134,35 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error('Error creating subscription type:', error);
-      return NextResponse.json(
+      const errorResponse = NextResponse.json(
         { error: 'Failed to create subscription type', details: error.message },
         { status: 500 }
       );
+      Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+        errorResponse.headers.set(key, value);
+      });
+      return errorResponse;
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       subscriptionType,
     });
+
+    Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+      response.headers.set(key, value);
+    });
+
+    return response;
   } catch (error: any) {
     console.error('Error in POST /api/subscriptions:', error);
-    return NextResponse.json(
+    const errorResponse = NextResponse.json(
       { error: 'Internal server error', details: error.message },
       { status: 500 }
     );
+    Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+      errorResponse.headers.set(key, value);
+    });
+    return errorResponse;
   }
 }

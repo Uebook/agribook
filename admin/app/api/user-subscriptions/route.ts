@@ -1,6 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/client';
 
+// CORS headers helper
+function getCorsHeaders() {
+  return {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Accept, Authorization',
+    'Access-Control-Max-Age': '86400',
+  };
+}
+
+// Handle OPTIONS request for CORS
+export async function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, {
+    status: 200,
+    headers: getCorsHeaders(),
+  });
+}
+
 // GET /api/user-subscriptions - Get user subscriptions
 export async function GET(request: NextRequest) {
   try {
@@ -9,10 +27,14 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status'); // active, expired, cancelled
 
     if (!userId) {
-      return NextResponse.json(
+      const errorResponse = NextResponse.json(
         { error: 'user_id is required' },
         { status: 400 }
       );
+      Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+        errorResponse.headers.set(key, value);
+      });
+      return errorResponse;
     }
 
     const supabase = createServerClient();
@@ -34,21 +56,35 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('Error fetching user subscriptions:', error);
-      return NextResponse.json(
+      const errorResponse = NextResponse.json(
         { error: 'Failed to fetch subscriptions', details: error.message },
         { status: 500 }
       );
+      Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+        errorResponse.headers.set(key, value);
+      });
+      return errorResponse;
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       subscriptions: subscriptions || [],
     });
+
+    Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+      response.headers.set(key, value);
+    });
+
+    return response;
   } catch (error: any) {
     console.error('Error in GET /api/user-subscriptions:', error);
-    return NextResponse.json(
+    const errorResponse = NextResponse.json(
       { error: 'Internal server error', details: error.message },
       { status: 500 }
     );
+    Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+      errorResponse.headers.set(key, value);
+    });
+    return errorResponse;
   }
 }
 
@@ -59,10 +95,14 @@ export async function POST(request: NextRequest) {
     const { user_id, subscription_type_id, payment_id, auto_renew } = body;
 
     if (!user_id || !subscription_type_id) {
-      return NextResponse.json(
+      const errorResponse = NextResponse.json(
         { error: 'user_id and subscription_type_id are required' },
         { status: 400 }
       );
+      Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+        errorResponse.headers.set(key, value);
+      });
+      return errorResponse;
     }
 
     const supabase = createServerClient();
@@ -75,10 +115,14 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (typeError || !subscriptionType) {
-      return NextResponse.json(
+      const errorResponse = NextResponse.json(
         { error: 'Subscription type not found' },
         { status: 404 }
       );
+      Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+        errorResponse.headers.set(key, value);
+      });
+      return errorResponse;
     }
 
     // Calculate end date for monthly subscriptions
@@ -115,10 +159,14 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error('Error creating user subscription:', error);
-      return NextResponse.json(
+      const errorResponse = NextResponse.json(
         { error: 'Failed to create subscription', details: error.message },
         { status: 500 }
       );
+      Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+        errorResponse.headers.set(key, value);
+      });
+      return errorResponse;
     }
 
     // Update user's subscription_type_id
@@ -127,15 +175,25 @@ export async function POST(request: NextRequest) {
       .update({ subscription_type_id })
       .eq('id', user_id);
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       subscription,
     });
+
+    Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+      response.headers.set(key, value);
+    });
+
+    return response;
   } catch (error: any) {
     console.error('Error in POST /api/user-subscriptions:', error);
-    return NextResponse.json(
+    const errorResponse = NextResponse.json(
       { error: 'Internal server error', details: error.message },
       { status: 500 }
     );
+    Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+      errorResponse.headers.set(key, value);
+    });
+    return errorResponse;
   }
 }

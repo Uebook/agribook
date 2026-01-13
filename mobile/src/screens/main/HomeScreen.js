@@ -929,6 +929,27 @@ const HomeScreen = ({ navigation }) => {
         </View>
       )}
 
+      {/* Subscription Banner (Readers only, if no active subscription) */}
+      {!isAuthor && !hasActiveSubscription && (
+        <View style={styles.section}>
+          <TouchableOpacity
+            style={[styles.subscriptionBanner, { backgroundColor: themeColors.primary.main }]}
+            onPress={() => navigation.navigate('Subscription')}
+          >
+            <View style={styles.subscriptionBannerContent}>
+              <Text style={styles.subscriptionBannerIcon}>💳</Text>
+              <View style={styles.subscriptionBannerText}>
+                <Text style={styles.subscriptionBannerTitle}>Unlock Unlimited Access</Text>
+                <Text style={styles.subscriptionBannerSubtitle}>
+                  Subscribe now and read all books for free!
+                </Text>
+              </View>
+              <Text style={styles.subscriptionBannerArrow}>→</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Personalized Recommendations (Readers only) */}
       {!isAuthor && (
         <View style={styles.section}>
