@@ -33,7 +33,7 @@ const LibraryScreen = ({ navigation }) => {
     const fetchLibrary = async () => {
       try {
         setLoading(true);
-        
+
         // If user is author, fetch their own books
         if (userRole === 'author' && userId) {
           const response = await apiClient.getBooks({
@@ -50,49 +50,111 @@ const LibraryScreen = ({ navigation }) => {
             userIdType: typeof userId,
             userIdLength: userId?.length,
           });
-          
-          const ordersResponse = await apiClient.getOrders(userId, { limit: 100 });
-          console.log('📦 Orders API response:', {
-            hasOrders: !!ordersResponse.orders,
-            ordersCount: ordersResponse.orders?.length || 0,
-            pagination: ordersResponse.pagination,
-          });
-          
-          const orders = ordersResponse.orders || [];
-          
-          // Extract unique books from orders
-          const purchasedBooks = [];
-          const bookIds = new Set();
-          
-          orders.forEach((order) => {
-            if (order.books && order.books.length > 0) {
-              order.books.forEach((book) => {
-                if (!bookIds.has(book.id)) {
+
+          try {
+            const ordersResponse = await apiClient.getOrders(userId, { limit: 100 });
+            console.log('📦 Orders API response:', {
+              hasOrders: !!ordersResponse.orders,
+              ordersCount: ordersResponse.orders?.length || 0,
+              pagination: ordersResponse.pagination,
+              fullResponse: JSON.stringify(ordersResponse, null, 2),
+            });
+
+            const orders = ordersResponse.orders || [];
+
+            // Extract unique books from orders
+            const purchasedBooks = [];
+            const bookIds = new Set();
+
+            if (orders.length === 0) {
+              console.log('⚠️ No orders found for user:', userId);
+            }
+
+            orders.forEach((order) => {
+              console.log('📖 Processing order:', {
+                orderId: order.id,
+                hasBooks: !!order.books,
+                booksCount: order.books?.length || 0,
+                books: order.books,
+              });
+
+              if (order.books && Array.isArray(order.books) && order.books.length > 0) {
+                order.books.forEach((book) => {
+                  if (book && book.id && !bookIds.has(book.id)) {
+                    bookIds.add(book.id);
+                    // Add reading progress and other metadata
+                    purchasedBooks.push({
+                      id: book.id,
+                      title: book.title || 'Untitled Book',
+                      cover_image_url: book.cover || book.cover_image_url || 'https://via.placeholder.com/200',
+                      cover: book.cover || book.cover_image_url || 'https://via.placeholder.com/200',
+                      author: {
+                        id: book.author?.id,
+                        name: book.author?.name || 'Unknown Author',
+                      },
+                      author_name: book.author?.name || 'Unknown Author',
+                      author_id: book.author?.id,
+                      readingProgress: 0, // TODO: Fetch from reading_progress table if exists
+                      lastRead: order.date ? new Date(order.date).toLocaleDateString() : 'Recently',
+                      isDownloaded: false, // TODO: Track downloaded status
+                      purchasedAt: order.date,
+                      price: book.price || 0,
+                      isFree: book.isFree || false,
+                    });
+                    console.log('✅ Added book to library:', book.title);
+                  }
+                });
+              } else {
+                console.log('⚠️ Order has no books array or empty:', order.id);
+              }
+            });
+
+            console.log('📚 Total purchased books found:', purchasedBooks.length);
+            setMyBooks(purchasedBooks);
+          } catch (ordersError) {
+            console.error('❌ Error fetching orders:', ordersError);
+            // Try fallback: use getPurchases if available
+            try {
+              console.log('🔄 Trying getPurchases as fallback...');
+              const purchasesResponse = await apiClient.getPurchases(userId);
+              console.log('📦 Purchases API response:', purchasesResponse);
+
+              const purchases = purchasesResponse.purchases || [];
+              const purchasedBooks = [];
+              const bookIds = new Set();
+
+              purchases.forEach((purchase) => {
+                const book = purchase.book || purchase.audio_book;
+                if (book && book.id && !bookIds.has(book.id)) {
                   bookIds.add(book.id);
-                  // Add reading progress and other metadata
                   purchasedBooks.push({
                     id: book.id,
-                    title: book.title,
-                    cover_image_url: book.cover || book.cover_image_url || 'https://via.placeholder.com/200',
-                    cover: book.cover || book.cover_image_url || 'https://via.placeholder.com/200',
+                    title: book.title || 'Untitled Book',
+                    cover_image_url: book.cover_image_url || book.cover_url || 'https://via.placeholder.com/200',
+                    cover: book.cover_image_url || book.cover_url || 'https://via.placeholder.com/200',
                     author: {
-                      name: book.author?.name || 'Unknown Author',
+                      id: purchase.book?.author_id || purchase.audio_book?.author_id,
+                      name: 'Unknown Author',
                     },
-                    author_name: book.author?.name || 'Unknown Author',
-                    author_id: book.author?.id,
-                    readingProgress: 0, // TODO: Fetch from reading_progress table if exists
-                    lastRead: order.date ? new Date(order.date).toLocaleDateString() : 'Recently',
-                    isDownloaded: false, // TODO: Track downloaded status
-                    purchasedAt: order.date,
-                    price: book.price,
-                    isFree: book.isFree || false,
+                    author_name: 'Unknown Author',
+                    author_id: purchase.book?.author_id || purchase.audio_book?.author_id,
+                    readingProgress: 0,
+                    lastRead: purchase.purchased_at ? new Date(purchase.purchased_at).toLocaleDateString() : 'Recently',
+                    isDownloaded: false,
+                    purchasedAt: purchase.purchased_at,
+                    price: purchase.amount || 0,
+                    isFree: purchase.amount === 0,
                   });
                 }
               });
+
+              console.log('📚 Total purchased books from fallback:', purchasedBooks.length);
+              setMyBooks(purchasedBooks);
+            } catch (purchasesError) {
+              console.error('❌ Error fetching purchases (fallback):', purchasesError);
+              setMyBooks([]);
             }
-          });
-          
-          setMyBooks(purchasedBooks);
+          }
         } else {
           setMyBooks([]);
         }
@@ -109,9 +171,17 @@ const LibraryScreen = ({ navigation }) => {
 
   const filteredBooks = useMemo(() => {
     if (activeTab === 'downloaded') {
-      return myBooks.filter((book) => book.isDownloaded);
+      // Since downloads are disabled, show all purchased books in "Downloaded" tab
+      // (all purchased books are available to read)
+      return myBooks;
     } else if (activeTab === 'recent') {
-      return myBooks.filter((book) => book.readingProgress > 0);
+      // Show books sorted by most recently purchased/accessed
+      // Sort by purchasedAt date (most recent first)
+      return [...myBooks].sort((a, b) => {
+        const dateA = a.purchasedAt ? new Date(a.purchasedAt).getTime() : 0;
+        const dateB = b.purchasedAt ? new Date(b.purchasedAt).getTime() : 0;
+        return dateB - dateA; // Most recent first
+      });
     }
     return myBooks;
   }, [activeTab, myBooks]);
@@ -120,11 +190,24 @@ const LibraryScreen = ({ navigation }) => {
     const isMyBook = userRole === 'author' && userId && item.author_id === userId;
     const coverUrl = item.cover_image_url || item.cover || 'https://via.placeholder.com/200';
     const authorName = item.author?.name || item.author_name || item.author?.name || 'Unknown Author';
-    
+
+    const handleBookPress = () => {
+      if (isMyBook) {
+        // Author viewing their own book - navigate to edit
+        navigation.navigate('EditBook', { bookId: item.id });
+      } else {
+        // Reader viewing purchased book - open in ReaderScreen (view PDF, not download)
+        navigation.navigate('Reader', {
+          bookId: item.id,
+          sample: false, // Not a sample, it's a purchased book
+        });
+      }
+    };
+
     return (
       <TouchableOpacity
         style={styles.bookCard}
-        onPress={() => isMyBook ? navigation.navigate('EditBook', { bookId: item.id }) : navigation.navigate('Reader', { bookId: item.id })}
+        onPress={handleBookPress}
       >
         <Image
           source={{ uri: coverUrl }}
@@ -313,7 +396,7 @@ const LibraryScreen = ({ navigation }) => {
               activeTab === 'downloaded' && styles.activeTabText,
             ]}
           >
-            Downloaded
+            Available
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -339,10 +422,75 @@ const LibraryScreen = ({ navigation }) => {
           renderItem={renderBookItem}
           keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
           contentContainerStyle={styles.listContent}
+          refreshing={loading}
+          onRefresh={() => {
+            const fetchLibrary = async () => {
+              try {
+                setLoading(true);
+
+                if (userRole === 'author' && userId) {
+                  const response = await apiClient.getBooks({
+                    author: userId,
+                    status: 'published',
+                    limit: 100,
+                  });
+                  setMyBooks(response.books || []);
+                } else if (userId) {
+                  const ordersResponse = await apiClient.getOrders(userId, { limit: 100 });
+                  const orders = ordersResponse.orders || [];
+                  const purchasedBooks = [];
+                  const bookIds = new Set();
+
+                  orders.forEach((order) => {
+                    if (order.books && Array.isArray(order.books) && order.books.length > 0) {
+                      order.books.forEach((book) => {
+                        if (book && book.id && !bookIds.has(book.id)) {
+                          bookIds.add(book.id);
+                          purchasedBooks.push({
+                            id: book.id,
+                            title: book.title || 'Untitled Book',
+                            cover_image_url: book.cover || book.cover_image_url || 'https://via.placeholder.com/200',
+                            cover: book.cover || book.cover_image_url || 'https://via.placeholder.com/200',
+                            author: {
+                              id: book.author?.id,
+                              name: book.author?.name || 'Unknown Author',
+                            },
+                            author_name: book.author?.name || 'Unknown Author',
+                            author_id: book.author?.id,
+                            readingProgress: 0,
+                            lastRead: order.date ? new Date(order.date).toLocaleDateString() : 'Recently',
+                            isDownloaded: false,
+                            purchasedAt: order.date,
+                            price: book.price || 0,
+                            isFree: book.isFree || false,
+                          });
+                        }
+                      });
+                    }
+                  });
+
+                  setMyBooks(purchasedBooks);
+                }
+              } catch (error) {
+                console.error('Error refreshing library:', error);
+              } finally {
+                setLoading(false);
+              }
+            };
+            fetchLibrary();
+          }}
         />
       ) : (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No books found</Text>
+          <Text style={styles.emptyText}>
+            {userRole === 'author'
+              ? 'No books found. Start by uploading your first book!'
+              : activeTab === 'downloaded'
+                ? 'No books available. Purchase books from the store to see them here.'
+                : activeTab === 'recent'
+                  ? 'No recent reading activity. Start reading a book to see it here.'
+                  : 'No purchased books found. Purchase books from the store to see them here.'}
+          </Text>
         </View>
       )}
     </View>

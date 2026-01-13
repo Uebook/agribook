@@ -693,8 +693,16 @@ class ApiClient {
   }
 
   // Orders API
-  async getOrders(userId) {
-    return this.request(`/api/orders?user_id=${userId}`);
+  async getOrders(userId, params = {}) {
+    const queryParams = new URLSearchParams();
+    queryParams.append('user_id', userId);
+    if (params.limit) {
+      queryParams.append('limit', params.limit.toString());
+    }
+    if (params.page) {
+      queryParams.append('page', params.page.toString());
+    }
+    return this.request(`/api/orders?${queryParams.toString()}`);
   }
 
   async createOrder(data) {
@@ -729,9 +737,16 @@ class ApiClient {
   }
 
   async markNotificationAsRead(notificationId) {
-    return this.request(`/api/notifications/${notificationId}`, {
+    return this.request('/api/notifications', {
       method: 'PUT',
-      body: JSON.stringify({ read: true }),
+      body: JSON.stringify({ notification_id: notificationId }),
+    });
+  }
+
+  async markAllNotificationsAsRead(userId) {
+    return this.request('/api/notifications', {
+      method: 'PUT',
+      body: JSON.stringify({ user_id: userId, mark_all: true }),
     });
   }
 
@@ -766,6 +781,35 @@ class ApiClient {
         payment_method: paymentMethod || 'razorpay',
         transaction_id: transactionId,
         amount: amount,
+      }),
+    });
+  }
+
+  // Subscriptions API
+  async getSubscriptions(params = {}) {
+    const queryParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        queryParams.append(key, value.toString());
+      }
+    });
+    const query = queryParams.toString();
+    return this.request(`/api/subscriptions${query ? `?${query}` : ''}`);
+  }
+
+  async getUserSubscriptions(userId, status = null) {
+    const query = status ? `?user_id=${userId}&status=${status}` : `?user_id=${userId}`;
+    return this.request(`/api/user-subscriptions${query}`);
+  }
+
+  async subscribeUser(userId, subscriptionTypeId, paymentId = null, autoRenew = false) {
+    return this.request('/api/user-subscriptions', {
+      method: 'POST',
+      body: JSON.stringify({
+        user_id: userId,
+        subscription_type_id: subscriptionTypeId,
+        payment_id: paymentId,
+        auto_renew: autoRenew,
       }),
     });
   }

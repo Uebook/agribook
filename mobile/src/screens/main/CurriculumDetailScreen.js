@@ -62,35 +62,12 @@ const CurriculumDetailScreen = ({ route, navigation }) => {
   };
 
   const handleDownloadPDF = async () => {
-    const pdfUrl = curriculum?.pdf_url;
-    if (!pdfUrl) {
-      Alert.alert('Error', 'PDF not available for this curriculum.');
-      return;
-    }
-
-    try {
-      setDownloading(true);
-      
-      // For iOS and Android, use Linking to open the PDF URL
-      // The system will handle the download
-      const supported = await Linking.canOpenURL(pdfUrl);
-      
-      if (supported) {
-        await Linking.openURL(pdfUrl);
-        Alert.alert(
-          'Download Started',
-          'The PDF will open in your browser. You can download it from there.',
-          [{ text: 'OK' }]
-        );
-      } else {
-        Alert.alert('Error', `Cannot open URL: ${pdfUrl}`);
-      }
-    } catch (error) {
-      console.error('Error downloading PDF:', error);
-      Alert.alert('Error', 'Failed to download PDF. Please try again.');
-    } finally {
-      setDownloading(false);
-    }
+    // Download is restricted - only allow viewing in-app
+    Alert.alert(
+      'Download Restricted',
+      'PDFs can only be viewed in the app. Use the "View PDF" button to read the curriculum.',
+      [{ text: 'OK' }]
+    );
   };
 
   const styles = StyleSheet.create({
@@ -244,6 +221,18 @@ const CurriculumDetailScreen = ({ route, navigation }) => {
           startInLoadingState={true}
           javaScriptEnabled={true}
           domStorageEnabled={true}
+          // Prevent downloads - only view PDFs in-app
+          onShouldStartLoadWithRequest={(request) => {
+            // Only allow loading the PDF URL for viewing, block download attempts
+            const url = request.url;
+            // Allow the original PDF URL and PDF content, block download redirects
+            if (url === pdfUrl || (url.includes('.pdf') && !url.includes('download') && !url.includes('attachment'))) {
+              return true;
+            }
+            // Block any URLs that look like download links
+            console.log('⚠️ Blocked potential download URL:', url);
+            return false;
+          }}
           renderLoading={() => (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={themeColors.primary.main} />
@@ -336,24 +325,13 @@ const CurriculumDetailScreen = ({ route, navigation }) => {
 
           <View style={styles.actionContainer}>
             <TouchableOpacity
-              style={styles.viewButton}
+              style={[styles.viewButton, { flex: 1 }]}
               onPress={handleViewPDF}
               disabled={!curriculum.pdf_url}
             >
               <Text style={styles.buttonText}>📄 View PDF</Text>
             </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.downloadButton}
-              onPress={handleDownloadPDF}
-              disabled={!curriculum.pdf_url || downloading}
-            >
-              {downloading ? (
-                <ActivityIndicator size="small" color={themeColors.text.light} />
-              ) : (
-                <Text style={styles.buttonText}>⬇️ Download</Text>
-              )}
-            </TouchableOpacity>
+            {/* Download button removed - downloads are restricted, only viewing allowed */}
           </View>
         </View>
       </ScrollView>

@@ -220,10 +220,10 @@ async function handleFileUpload(formData: FormData) {
       if (fileObj instanceof File) {
         console.log('Reading as File object');
         try {
-          const arrayBuffer = await fileObj.arrayBuffer();
-          fileBuffer = Buffer.from(arrayBuffer);
-          finalFileName = fileObj.name || fileName;
-          contentType = fileObj.type || fileType;
+        const arrayBuffer = await fileObj.arrayBuffer();
+        fileBuffer = Buffer.from(arrayBuffer);
+        finalFileName = fileObj.name || fileName;
+        contentType = fileObj.type || fileType;
           console.log('✅ File read successfully:', { 
             size: fileBuffer.length, 
             finalFileName, 
@@ -309,21 +309,21 @@ async function handleFileUpload(formData: FormData) {
         // But sometimes they might be wrapped or have special properties
         try {
           // Try: Check if it has a _data or data property (some FormData implementations)
-          const dataProp = (fileObj as any)._data || (fileObj as any).data;
-          if (dataProp) {
-            console.log('Found _data or data property, trying to read...');
-            if (Buffer.isBuffer(dataProp)) {
-              fileBuffer = dataProp;
-              finalFileName = fileName;
-              contentType = fileType;
-              bufferFound = true;
-              console.log('✅ File read from _data/data property:', { size: fileBuffer.length });
-            } else if (dataProp instanceof Uint8Array) {
-              fileBuffer = Buffer.from(dataProp);
-              finalFileName = fileName;
-              contentType = fileType;
-              bufferFound = true;
-              console.log('✅ File read from _data/data as Uint8Array:', { size: fileBuffer.length });
+            const dataProp = (fileObj as any)._data || (fileObj as any).data;
+            if (dataProp) {
+              console.log('Found _data or data property, trying to read...');
+              if (Buffer.isBuffer(dataProp)) {
+                fileBuffer = dataProp;
+                finalFileName = fileName;
+                contentType = fileType;
+                bufferFound = true;
+                console.log('✅ File read from _data/data property:', { size: fileBuffer.length });
+              } else if (dataProp instanceof Uint8Array) {
+                fileBuffer = Buffer.from(dataProp);
+                finalFileName = fileName;
+                contentType = fileType;
+                bufferFound = true;
+                console.log('✅ File read from _data/data as Uint8Array:', { size: fileBuffer.length });
             } else if (typeof dataProp === 'string') {
               // Might be base64 encoded
               if (dataProp.startsWith('data:')) {
@@ -381,36 +381,36 @@ async function handleFileUpload(formData: FormData) {
             }
           }
           
-          // Last resort: Check if it's a string (base64)
+            // Last resort: Check if it's a string (base64)
           if (!bufferFound && typeof fileObj === 'string') {
-            if (fileObj.startsWith('data:')) {
-              const base64Data = fileObj.split(',')[1];
-              fileBuffer = Buffer.from(base64Data, 'base64');
-              finalFileName = fileName;
-              contentType = fileType;
-              bufferFound = true;
-              console.log('✅ File read as base64 string:', { size: fileBuffer.length });
+              if (fileObj.startsWith('data:')) {
+                const base64Data = fileObj.split(',')[1];
+                fileBuffer = Buffer.from(base64Data, 'base64');
+                finalFileName = fileName;
+                contentType = fileType;
+                bufferFound = true;
+                console.log('✅ File read as base64 string:', { size: fileBuffer.length });
             }
-          }
+              }
           
           if (!bufferFound) {
-            // Final error with all details
+              // Final error with all details
             console.error('❌ All file reading methods failed for React Native file');
-            console.error('File object type:', typeof fileObj);
-            console.error('File object constructor:', fileObj?.constructor?.name);
-            console.error('File object prototype:', Object.getPrototypeOf(fileObj)?.constructor?.name);
-            console.error('File object keys:', fileObj ? Object.keys(fileObj) : 'null');
+              console.error('File object type:', typeof fileObj);
+              console.error('File object constructor:', fileObj?.constructor?.name);
+              console.error('File object prototype:', Object.getPrototypeOf(fileObj)?.constructor?.name);
+              console.error('File object keys:', fileObj ? Object.keys(fileObj) : 'null');
             console.error('File object values (first 3):', fileObj ? Object.values(fileObj).slice(0, 3) : 'null');
-            
-            throw new Error(
+              
+              throw new Error(
               `Cannot read file from React Native. Type: ${typeof fileObj}, Constructor: ${fileObj?.constructor?.name || 'unknown'}, ` +
-              `Prototype: ${Object.getPrototypeOf(fileObj)?.constructor?.name || 'unknown'}, ` +
-              `Has arrayBuffer: ${typeof fileObj?.arrayBuffer === 'function'}, ` +
-              `Has stream: ${typeof fileObj?.stream === 'function'}, ` +
-              `Has text: ${typeof fileObj?.text === 'function'}, ` +
-              `Keys: ${fileObj ? Object.keys(fileObj).join(', ') : 'none'}`
-            );
-          }
+                `Prototype: ${Object.getPrototypeOf(fileObj)?.constructor?.name || 'unknown'}, ` +
+                `Has arrayBuffer: ${typeof fileObj?.arrayBuffer === 'function'}, ` +
+                `Has stream: ${typeof fileObj?.stream === 'function'}, ` +
+                `Has text: ${typeof fileObj?.text === 'function'}, ` +
+                `Keys: ${fileObj ? Object.keys(fileObj).join(', ') : 'none'}`
+              );
+            }
         } catch (rnError: any) {
           console.error('Error processing React Native file:', rnError);
           throw rnError;
@@ -499,7 +499,7 @@ async function handleFileUpload(formData: FormData) {
     } catch (verifyError) {
       console.warn('Could not verify bucket existence, proceeding with upload:', verifyError);
     }
-
+    
     // Upload to Supabase Storage
     const { data, error } = await supabase.storage
       .from(bucket)

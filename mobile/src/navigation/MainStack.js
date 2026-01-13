@@ -28,6 +28,7 @@ import CurriculumDetailScreen from '../screens/main/CurriculumDetailScreen';
 import EditBookScreen from '../screens/main/EditBookScreen';
 import MyBooksScreen from '../screens/main/MyBooksScreen';
 import FileUploadScreen from '../screens/main/FileUploadScreen';
+import SubscriptionScreen from '../screens/main/SubscriptionScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -65,6 +66,10 @@ const MainStack = () => {
       <Stack.Screen 
         name="Payment" 
         component={PaymentScreen}
+      />
+      <Stack.Screen 
+        name="Subscription" 
+        component={SubscriptionScreen}
       />
       <Stack.Screen 
         name="OrderHistory" 

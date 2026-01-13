@@ -277,6 +277,12 @@ const SettingsScreen = ({ navigation }) => {
           type="arrow"
           onPress={() => navigation.navigate('FileUpload')}
         />
+        <SettingItem
+          title="Subscriptions"
+          subtitle="Manage your subscription plans"
+          type="arrow"
+          onPress={() => navigation.navigate('Subscription')}
+        />
       </SettingSection>
 
       {/* Notification Settings */}

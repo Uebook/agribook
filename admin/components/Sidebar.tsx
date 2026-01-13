@@ -14,6 +14,7 @@ export default function Sidebar() {
         { href: '/categories', icon: '🏷️', label: 'Categories' },
         { href: '/users', icon: '👥', label: 'Users' },
         { href: '/purchases', icon: '🛒', label: 'Purchased Books' },
+        { href: '/subscriptions', icon: '💳', label: 'Subscriptions' },
         { href: '/curriculum', icon: '📄', label: 'Government Curriculum' },
         { href: '/youtube-channels', icon: '📺', label: 'YouTube Channels' },
         { href: '/settings', icon: '⚙️', label: 'Settings' },
@@ -31,8 +32,8 @@ export default function Sidebar() {
                                 <Link
                                     href={item.href}
                                     className={`flex items-center space-x-3 px-4 py-2 rounded-lg transition-colors ${isActive
-                                            ? 'bg-green-50 text-green-700'
-                                            : 'text-gray-700 hover:bg-gray-50'
+                                        ? 'bg-green-50 text-green-700'
+                                        : 'text-gray-700 hover:bg-gray-50'
                                         }`}
                                 >
                                     <span>{item.icon}</span>

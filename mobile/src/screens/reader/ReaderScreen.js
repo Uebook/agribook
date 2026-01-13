@@ -43,6 +43,8 @@ const ReaderScreen = ({ route, navigation }) => {
   const [loadingPdf, setLoadingPdf] = useState(true);
   const [isPurchased, setIsPurchased] = useState(false);
   const [book, setBook] = useState(null);
+  const [useGoogleViewer, setUseGoogleViewer] = useState(true); // Try Google Viewer first
+  const [webViewError, setWebViewError] = useState(false);
 
   // Audio Reading Mode State
   const [isAudioMode, setIsAudioMode] = useState(false);
@@ -77,7 +79,7 @@ These practices have revolutionized the agricultural industry, making it more ef
 
       try {
         setLoadingPdf(true);
-        
+
         // Fetch book details
         const bookResponse = await apiClient.getBook(bookId);
         const bookData = bookResponse.book;
@@ -110,7 +112,7 @@ These practices have revolutionized the agricultural industry, making it more ef
         // Check if book is purchased
         const ordersResponse = await apiClient.getOrders(userId, { limit: 100 });
         const orders = ordersResponse.orders || [];
-        
+
         const purchased = orders.some((order) => {
           if (order.books && Array.isArray(order.books)) {
             return order.books.some((b) => b.id === bookId);
@@ -691,11 +693,12 @@ These practices have revolutionized the agricultural industry, making it more ef
       {/* Reader Content - Show PDF if purchased, otherwise show sample */}
       {isPurchased && pdfUrl ? (
         <WebView
-          source={{ 
-            uri: pdfUrl,
-            headers: {
-              'Accept': 'application/pdf',
-            },
+          source={{
+            // Use Google Docs Viewer to force inline viewing and prevent downloads
+            // If Google Viewer fails, fallback to direct PDF with inline parameters
+            uri: useGoogleViewer
+              ? `https://docs.google.com/viewer?url=${encodeURIComponent(pdfUrl)}&embedded=true`
+              : `${pdfUrl}${pdfUrl.includes('#') ? '&' : '#'}toolbar=0&navpanes=0&scrollbar=1&view=FitH&zoom=page-fit`,
           }}
           style={styles.readerContent}
           startInLoadingState={true}
@@ -703,11 +706,27 @@ These practices have revolutionized the agricultural industry, making it more ef
           domStorageEnabled={true}
           allowsInlineMediaPlayback={true}
           mediaPlaybackRequiresUserAction={false}
+          // Prevent downloads - only view PDFs in-app
+          onShouldStartLoadWithRequest={(request) => {
+            const url = request.url;
+            const googleViewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(pdfUrl)}&embedded=true`;
+
+            // Allow Google Docs Viewer and the original PDF URL, block everything else
+            if (url === googleViewerUrl ||
+              url.startsWith('https://docs.google.com/viewer') ||
+              url === pdfUrl ||
+              (url.includes('.pdf') && !url.includes('download') && !url.includes('attachment') && !url.includes('Content-Disposition'))) {
+              return true;
+            }
+            // Block any URLs that look like download links
+            console.log('⚠️ ReaderScreen: Blocked potential download URL:', url);
+            return false;
+          }}
           renderLoading={() => (
             <View style={[styles.loadingContainer, { backgroundColor: currentTheme.background }]}>
               <ActivityIndicator size="large" color={themeColors.primary.main} />
               <Text style={{ marginTop: 16, color: currentTheme.text }}>
-                Loading PDF...
+                {useGoogleViewer ? 'Loading PDF via Google Viewer...' : 'Loading PDF...'}
               </Text>
             </View>
           )}
@@ -715,8 +734,18 @@ These practices have revolutionized the agricultural industry, making it more ef
             const { nativeEvent } = syntheticEvent;
             console.error('WebView error: ', nativeEvent);
             console.error('Failed PDF URL: ', pdfUrl);
+            setWebViewError(true);
+
+            // If Google Viewer fails, try direct PDF URL
+            if (useGoogleViewer) {
+              console.log('⚠️ Google Docs Viewer failed, trying direct PDF URL...');
+              setUseGoogleViewer(false);
+              setWebViewError(false);
+              return;
+            }
+
             Alert.alert(
-              'Error', 
+              'Error',
               'Failed to load PDF. The link may have expired. Please try again.',
               [
                 {
@@ -726,6 +755,8 @@ These practices have revolutionized the agricultural industry, making it more ef
                     const fetchPdf = async () => {
                       try {
                         setLoadingPdf(true);
+                        setUseGoogleViewer(true); // Reset to Google Viewer
+                        setWebViewError(false);
                         const downloadResponse = await apiClient.getBookDownloadUrl(bookId);
                         if (downloadResponse.downloadUrl) {
                           setPdfUrl(downloadResponse.downloadUrl);
@@ -752,9 +783,58 @@ These practices have revolutionized the agricultural industry, making it more ef
                 'PDF access expired. Please close and reopen the book.',
                 [{ text: 'OK', onPress: () => navigation.goBack() }]
               );
+            } else if (useGoogleViewer && nativeEvent.statusCode >= 400) {
+              // If Google Viewer returns error, try direct PDF
+              console.log('⚠️ Google Docs Viewer HTTP error, trying direct PDF...');
+              setUseGoogleViewer(false);
             }
           }}
+          onLoadEnd={() => {
+            // PDF loaded successfully
+            setWebViewError(false);
+            setLoadingPdf(false);
+          }}
         />
+      ) : webViewError && isPurchased && pdfUrl ? (
+        // Show error state if WebView failed
+        <View style={[styles.loadingContainer, { backgroundColor: currentTheme.background, justifyContent: 'center', alignItems: 'center', padding: 40 }]}>
+          <Text style={{ fontSize: 48, marginBottom: 16 }}>⚠️</Text>
+          <Text style={{ fontSize: 18, color: currentTheme.text, marginBottom: 8, fontWeight: '600' }}>
+            Failed to Load PDF
+          </Text>
+          <Text style={{ fontSize: 14, color: currentTheme.text, textAlign: 'center', marginBottom: 20 }}>
+            The PDF could not be displayed. Please try again.
+          </Text>
+          <TouchableOpacity
+            style={{
+              backgroundColor: themeColors.primary.main,
+              paddingHorizontal: 24,
+              paddingVertical: 12,
+              borderRadius: 8,
+            }}
+            onPress={() => {
+              setWebViewError(false);
+              setUseGoogleViewer(true);
+              // Force reload by updating PDF URL
+              const fetchPdf = async () => {
+                try {
+                  setLoadingPdf(true);
+                  const downloadResponse = await apiClient.getBookDownloadUrl(bookId);
+                  if (downloadResponse.downloadUrl) {
+                    setPdfUrl(downloadResponse.downloadUrl);
+                  }
+                } catch (error) {
+                  console.error('Error retrying PDF fetch:', error);
+                } finally {
+                  setLoadingPdf(false);
+                }
+              };
+              fetchPdf();
+            }}
+          >
+            <Text style={{ color: '#FFFFFF', fontWeight: '600' }}>Retry</Text>
+          </TouchableOpacity>
+        </View>
       ) : (
         <ScrollView
           style={styles.readerContent}
