@@ -36,21 +36,9 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Allow authentication API routes without middleware
+  // Allow all API routes to pass through - they handle their own authentication
+  // API routes use user tokens, not admin cookies
   if (pathname.startsWith('/api')) {
-    if (isAuthApiPath(pathname)) {
-      return NextResponse.next();
-    }
-
-    // Protect other API routes - require auth cookie
-    const adminAuth = request.cookies.get('adminAuth')?.value;
-    if (!adminAuth || adminAuth !== 'true') {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
     return NextResponse.next();
   }
 
