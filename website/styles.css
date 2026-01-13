@@ -84,6 +84,18 @@ body {
     color: var(--primary-color);
 }
 
+.nav-links .btn-primary {
+    background: var(--primary-color);
+    color: var(--bg-white);
+    padding: 0.5rem 1.25rem;
+    border-radius: 6px;
+}
+
+.nav-links .btn-primary:hover {
+    background: var(--primary-dark);
+    color: var(--bg-white);
+}
+
 .mobile-menu-toggle {
     display: none;
     flex-direction: column;
@@ -494,33 +506,52 @@ section {
 .statistics {
     background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
     color: var(--bg-white);
+    padding: 4rem 0;
 }
 
 .stats-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: nowrap;
 }
 
 .stat-card {
     text-align: center;
-    padding: 2rem;
+    padding: 2rem 1.5rem;
+    flex: 1;
+    border-right: 1px solid rgba(255, 255, 255, 0.15);
+    min-width: 0;
+}
+
+.stat-card:last-child {
+    border-right: none;
 }
 
 .stat-icon {
-    font-size: 3rem;
+    font-size: 2.8rem;
     margin-bottom: 1rem;
+    display: block;
+    line-height: 1;
 }
 
 .stat-value {
     font-size: 3rem;
     font-weight: 700;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.75rem;
+    display: block;
+    line-height: 1.2;
+    color: var(--bg-white);
 }
 
 .stat-label {
-    font-size: 1.1rem;
-    opacity: 0.9;
+    font-size: 0.85rem;
+    opacity: 0.85;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 500;
+    line-height: 1.4;
 }
 
 /* About Section */
@@ -731,6 +762,27 @@ section {
     .books-grid,
     .authors-grid {
         grid-template-columns: 1fr;
+    }
+
+    .stats-grid {
+        flex-wrap: wrap;
+        gap: 1.5rem;
+    }
+
+    .stat-card {
+        flex: 0 0 calc(50% - 0.75rem);
+        border-right: none;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+        padding-bottom: 1.5rem;
+    }
+
+    .stat-card:nth-child(even) {
+        border-left: 1px solid rgba(255, 255, 255, 0.15);
+        padding-left: 1.5rem;
+    }
+
+    .stat-card:nth-last-child(-n+2) {
+        border-bottom: none;
     }
 }
 

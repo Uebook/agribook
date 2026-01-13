@@ -168,10 +168,6 @@ function populateBooks() {
     books.slice(0, 8).forEach(book => {
         const bookCard = document.createElement('div');
         bookCard.className = 'book-card';
-        const isFree = book.price === 0;
-        const priceDisplay = isFree 
-            ? '<span class="book-price free">FREE</span>'
-            : `<span class="book-price">₹${book.price}</span><span class="book-price original">₹${book.originalPrice}</span>`;
         
         bookCard.innerHTML = `
             <img src="${book.cover}" alt="${book.title}" class="book-cover" loading="lazy">
@@ -184,9 +180,6 @@ function populateBooks() {
                         <span>${book.rating}</span>
                         <span>(${book.reviews})</span>
                     </div>
-                </div>
-                <div class="book-price-container">
-                    ${priceDisplay}
                 </div>
             </div>
         `;
@@ -228,14 +221,28 @@ function animateNumber(element, target, duration = 2000) {
     const start = 0;
     const increment = target / (duration / 16);
     let current = start;
+    const isDecimal = element.hasAttribute('data-decimal');
+    const isKFormat = element.hasAttribute('data-format') && element.getAttribute('data-format') === 'k';
 
     const timer = setInterval(() => {
         current += increment;
         if (current >= target) {
-            element.textContent = formatNumber(target);
+            if (isDecimal) {
+                element.textContent = target.toFixed(1);
+            } else if (isKFormat && target >= 1000) {
+                element.textContent = (target / 1000).toFixed(1) + 'K';
+            } else {
+                element.textContent = formatNumber(target);
+            }
             clearInterval(timer);
         } else {
-            element.textContent = formatNumber(Math.floor(current));
+            if (isDecimal) {
+                element.textContent = current.toFixed(1);
+            } else if (isKFormat && current >= 1000) {
+                element.textContent = (current / 1000).toFixed(1) + 'K';
+            } else {
+                element.textContent = formatNumber(Math.floor(current));
+            }
         }
     }, 16);
 }
@@ -261,7 +268,12 @@ const observer = new IntersectionObserver((entries) => {
             
             if (!isNaN(target)) {
                 if (element.classList.contains('stat-number') || element.classList.contains('stat-value')) {
-                    animateNumber(element, target);
+                    const isDecimal = element.hasAttribute('data-decimal');
+                    if (isDecimal) {
+                        animateDecimalNumber(element, target);
+                    } else {
+                        animateNumber(element, target);
+                    }
                 }
                 element.classList.add('fade-in-up');
             }
