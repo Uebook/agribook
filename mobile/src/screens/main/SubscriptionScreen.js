@@ -42,7 +42,8 @@ const SubscriptionScreen = ({ navigation }) => {
   const fetchSubscriptions = async () => {
     try {
       setLoading(true);
-      const response = await apiClient.getSubscriptions({ is_active: true });
+      // Only fetch monthly subscriptions (per_book is default, no subscription needed)
+      const response = await apiClient.getSubscriptions({ is_active: true, type: 'monthly' });
       setSubscriptions(response.subscriptionTypes || []);
     } catch (error) {
       console.error('Error fetching subscriptions:', error);
@@ -72,15 +73,8 @@ const SubscriptionScreen = ({ navigation }) => {
       return;
     }
 
-    if (subscription.type === 'per_book') {
-      Alert.alert(
-        'Per Book Pay',
-        'This is a pay-per-book plan. You will be charged when you purchase individual books.',
-        [{ text: 'OK' }]
-      );
-      return;
-    }
-
+    // Only monthly subscriptions can be subscribed to
+    // Per book pay is the default (no subscription needed)
     if (hasActiveSubscription) {
       Alert.alert(
         'Active Subscription',
@@ -329,6 +323,26 @@ const SubscriptionScreen = ({ navigation }) => {
           </View>
         )}
 
+        {/* Per Book Pay Option (Default - No subscription needed) */}
+        <View style={styles.subscriptionCard}>
+          <View style={styles.subscriptionHeader}>
+            <Text style={styles.subscriptionName}>Per Book Pay</Text>
+            <Text style={styles.subscriptionType}>Default</Text>
+          </View>
+          <Text style={styles.subscriptionDescription}>
+            Pay for individual books as you read them. No subscription required.
+          </Text>
+          <Text style={styles.subscriptionPrice}>Pay per book</Text>
+          <Text style={styles.subscriptionPriceLabel}>
+            You'll be charged when you purchase a book
+          </Text>
+          <View style={[styles.subscribeButton, { backgroundColor: themeColors.background.secondary }]}>
+            <Text style={[styles.subscribeButtonText, { color: themeColors.text.primary }]}>
+              {hasActiveSubscription ? 'Available after subscription expires' : '✓ Current Plan'}
+            </Text>
+          </View>
+        </View>
+
         {subscriptions.map((subscription) => {
           const isActive = userSubscriptions.some(
             (sub) =>
@@ -347,9 +361,7 @@ const SubscriptionScreen = ({ navigation }) => {
             >
               <View style={styles.subscriptionHeader}>
                 <Text style={styles.subscriptionName}>{subscription.name}</Text>
-                <Text style={styles.subscriptionType}>
-                  {subscription.type === 'monthly' ? 'Monthly' : 'Per Book'}
-                </Text>
+                <Text style={styles.subscriptionType}>Monthly</Text>
               </View>
 
               {subscription.description && (
@@ -359,8 +371,7 @@ const SubscriptionScreen = ({ navigation }) => {
               )}
 
               <Text style={styles.subscriptionPrice}>
-                ₹{subscription.price.toFixed(2)}
-                {subscription.type === 'monthly' ? '/month' : '/book'}
+                ₹{subscription.price.toFixed(2)}/month
               </Text>
               {subscription.duration_days && (
                 <Text style={styles.subscriptionPriceLabel}>
@@ -384,9 +395,7 @@ const SubscriptionScreen = ({ navigation }) => {
                   {processing ? (
                     <ActivityIndicator color={themeColors.text.light || '#FFFFFF'} />
                   ) : (
-                    <Text style={styles.subscribeButtonText}>
-                      {subscription.type === 'monthly' ? 'Subscribe Now' : 'Select Plan'}
-                    </Text>
+                    <Text style={styles.subscribeButtonText}>Subscribe Now</Text>
                   )}
                 </TouchableOpacity>
               )}

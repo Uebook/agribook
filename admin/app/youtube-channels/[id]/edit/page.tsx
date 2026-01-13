@@ -82,7 +82,7 @@ export default function EditYouTubeChannelPage({ params }: { params: Promise<{ i
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.name || !formData.channel_url) {
       alert('Name and Channel URL are required');
       return;

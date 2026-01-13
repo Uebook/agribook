@@ -41,8 +41,8 @@ const BottomTabNavigator = () => {
         },
       }}
     >
-      <Tab.Screen 
-        name="Home" 
+      <Tab.Screen
+        name="Home"
         component={HomeScreen}
         options={{
           title: t('home'),
@@ -51,8 +51,8 @@ const BottomTabNavigator = () => {
         }}
       />
       {!isAuthor && (
-        <Tab.Screen 
-          name="BookStore" 
+        <Tab.Screen
+          name="BookStore"
           component={BookStoreScreen}
           options={{
             title: t('search'),
@@ -62,8 +62,8 @@ const BottomTabNavigator = () => {
         />
       )}
       {!isAuthor && (
-        <Tab.Screen 
-          name="Library" 
+        <Tab.Screen
+          name="Library"
           component={LibraryScreen}
           options={{
             title: t('library'),
@@ -72,8 +72,8 @@ const BottomTabNavigator = () => {
           }}
         />
       )}
-      <Tab.Screen 
-        name="Profile" 
+      <Tab.Screen
+        name="Profile"
         component={ProfileScreen}
         options={{
           title: t('profile'),

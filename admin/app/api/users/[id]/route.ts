@@ -9,14 +9,14 @@ export async function GET(
   try {
     const supabase = createServerClient();
     const { id } = await params;
-    
+
     // Get user - support all roles (reader, author, etc.)
     const { data: user, error } = await supabase
       .from('users')
       .select('*')
       .eq('id', id)
       .single();
-    
+
     if (error) {
       console.error('Error fetching user:', error);
       // Check if it's a "not found" error (PGRST116) or actual database error
@@ -35,7 +35,7 @@ export async function GET(
         { status: 500 }
       );
     }
-    
+
     if (!user) {
       // This shouldn't happen if error is null, but handle it anyway
       return NextResponse.json(
@@ -43,7 +43,7 @@ export async function GET(
         { status: 404 }
       );
     }
-    
+
     return NextResponse.json({ user });
   } catch (error) {
     console.error('Error in GET /api/users/[id]:', error);
@@ -63,7 +63,7 @@ export async function PUT(
     const supabase = createServerClient();
     const { id } = await params;
     const body = await request.json();
-    
+
     // Prepare update data - only include fields that are provided
     const updateData: any = {
       updated_at: new Date().toISOString(),
@@ -80,21 +80,21 @@ export async function PUT(
     if (body.pincode !== undefined) updateData.pincode = body.pincode || null;
     if (body.website !== undefined) updateData.website = body.website || null;
     if (body.avatar_url !== undefined) updateData.avatar_url = body.avatar_url || null;
-    
+
     console.log('Updating user:', id, 'with data:', updateData); // Debug log
-    
+
     const { data: user, error } = await supabase
       .from('users')
       .update(updateData)
       .eq('id', id)
       .select()
       .single();
-    
+
     if (error) {
       console.error('Error updating user:', error);
       console.error('Error details:', JSON.stringify(error, null, 2));
       return NextResponse.json(
-        { 
+        {
           error: 'Failed to update user',
           details: error.message || 'Unknown error',
         },
@@ -108,13 +108,13 @@ export async function PUT(
         { status: 404 }
       );
     }
-    
+
     console.log('User updated successfully:', user); // Debug log
     return NextResponse.json({ user });
   } catch (error: any) {
     console.error('Error in PUT /api/users/[id]:', error);
     return NextResponse.json(
-      { 
+      {
         error: 'Internal server error',
         details: error.message || 'Unknown error',
       },
@@ -131,13 +131,13 @@ export async function DELETE(
   try {
     const supabase = createServerClient();
     const { id } = await params;
-    
+
     // Delete user from database
     const { error } = await supabase
       .from('users')
       .delete()
       .eq('id', id);
-    
+
     if (error) {
       console.error('Error deleting user:', error);
       return NextResponse.json(
@@ -145,7 +145,7 @@ export async function DELETE(
         { status: 500 }
       );
     }
-    
+
     return NextResponse.json({
       success: true,
       message: 'User deleted successfully',

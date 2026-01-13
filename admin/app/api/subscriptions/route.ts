@@ -63,9 +63,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (type !== 'monthly' && type !== 'per_book') {
+    if (type !== 'monthly') {
       return NextResponse.json(
-        { error: 'type must be either "monthly" or "per_book"' },
+        { error: 'type must be "monthly" (Per Book Pay is the default, no subscription needed)' },
         { status: 400 }
       );
     }

@@ -36,7 +36,7 @@ const PaymentScreen = ({ route, navigation }) => {
   const [razorpayOpened, setRazorpayOpened] = useState(false);
   const razorpayTimeoutRef = useRef(null);
 
-  // Fetch book or audio book details
+  // Fetch book or audio book details and check subscription
   useEffect(() => {
     const fetchItemDetails = async () => {
       try {
@@ -47,6 +47,21 @@ const PaymentScreen = ({ route, navigation }) => {
           const response = await apiClient.getAudioBook(audioBookId);
           setAudioBook(response.audioBook);
         }
+
+        // Check if user has active subscription
+        if (userId) {
+          try {
+            const subResponse = await apiClient.getUserSubscriptions(userId, 'active');
+            const activeSubs = subResponse.subscriptions || [];
+            const hasActive = activeSubs.some(
+              (sub) => sub.status === 'active' && (!sub.end_date || new Date(sub.end_date) > new Date())
+            );
+            setHasActiveSubscription(hasActive);
+          } catch (error) {
+            console.error('Error checking subscription:', error);
+            setHasActiveSubscription(false);
+          }
+        }
       } catch (error) {
         console.error('Error fetching item details:', error);
         Alert.alert('Error', 'Failed to load item details');
@@ -55,7 +70,7 @@ const PaymentScreen = ({ route, navigation }) => {
     };
 
     fetchItemDetails();
-  }, [bookId, audioBookId]);
+  }, [bookId, audioBookId, userId]);
 
   const item = book || audioBook;
   const itemPrice = item?.price || 0;
@@ -64,6 +79,33 @@ const PaymentScreen = ({ route, navigation }) => {
   const handlePayment = async () => {
     if (!userId) {
       Alert.alert('Error', 'Please login to purchase');
+      return;
+    }
+
+    // Check if user has active subscription - if yes, allow free access
+    if (hasActiveSubscription && !isFree) {
+      try {
+        setProcessing(true);
+        // Add book to library without payment (subscription benefit)
+        await apiClient.purchaseBook(
+          userId,
+          bookId,
+          'subscription',
+          `SUB-${Date.now()}`,
+          audioBookId,
+          0
+        );
+        Alert.alert(
+          'Success! 🎉',
+          'Book added to your library with your active subscription!',
+          [{ text: 'OK', onPress: () => navigation.goBack() }]
+        );
+      } catch (error) {
+        console.error('Error adding book with subscription:', error);
+        Alert.alert('Error', 'Failed to add book. Please try again.');
+      } finally {
+        setProcessing(false);
+      }
       return;
     }
 

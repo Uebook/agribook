@@ -119,7 +119,7 @@ const AudioBookScreen = ({ route, navigation }) => {
     try {
       // Try to get signed URL from API (for Supabase storage files)
       let audioUrl = audioBook.audio_url;
-      
+
       try {
         const signedUrlResponse = await apiClient.getAudioBookSignedUrl(audioId);
         if (signedUrlResponse?.audioUrl) {
@@ -149,16 +149,16 @@ const AudioBookScreen = ({ route, navigation }) => {
               domain: error.domain,
             });
             console.error('Audio URL:', audioUrl);
-            
+
             // Provide more specific error messages
             let errorMessage = 'Failed to load audio file.\n\nPlease check:\n- Your internet connection\n- The audio file exists\n- The file format is supported (MP3, M4A, WAV)';
-            
+
             if (error.code === 'ENOENT' || error.message?.includes('not found')) {
               errorMessage = 'Audio file not found. Please check if the file was uploaded correctly.';
             } else if (error.code === 'ENETUNREACH' || error.message?.includes('network')) {
               errorMessage = 'Network error. Please check your internet connection.';
             }
-            
+
             Alert.alert('Error', errorMessage);
             return;
           }
@@ -183,7 +183,7 @@ const AudioBookScreen = ({ route, navigation }) => {
 
       // Set callbacks
       sound.setNumberOfLoops(0); // Don't loop
-      
+
       // Set volume (0.0 to 1.0)
       sound.setVolume(1.0);
     } catch (error) {
@@ -246,7 +246,7 @@ const AudioBookScreen = ({ route, navigation }) => {
                 setCurrentTime(seconds);
               }
             });
-            
+
             // Check if still playing
             soundRef.current.isPlaying((playing) => {
               if (!playing && isPlaying) {
@@ -482,7 +482,7 @@ const AudioBookScreen = ({ route, navigation }) => {
               disabled={!soundRef.current || isLoadingAudio}
             />
             <View style={styles.controlsContainer}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.controlButton}
                 onPress={handleSkipBackward}
                 disabled={!soundRef.current || isLoadingAudio}
@@ -502,7 +502,7 @@ const AudioBookScreen = ({ route, navigation }) => {
                   </Text>
                 )}
               </TouchableOpacity>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.controlButton}
                 onPress={handleSkipForward}
                 disabled={!soundRef.current || isLoadingAudio}

@@ -173,11 +173,10 @@ export default function YouTubeChannelViewPage({ params }: { params: Promise<{ i
                     {channel.verified && (
                       <span className="text-green-600 font-bold">✓</span>
                     )}
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                      channel.is_active 
-                        ? 'bg-green-100 text-green-800' 
+                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${channel.is_active
+                        ? 'bg-green-100 text-green-800'
                         : 'bg-gray-100 text-gray-800'
-                    }`}>
+                      }`}>
                       {channel.is_active ? 'Active' : 'Inactive'}
                     </span>
                   </div>
@@ -223,16 +222,16 @@ export default function YouTubeChannelViewPage({ params }: { params: Promise<{ i
                 <div>
                   <h4 className="font-medium text-gray-700 mb-1">Created At</h4>
                   <p className="text-gray-600">
-                    {channel.created_at 
-                      ? new Date(channel.created_at).toLocaleString() 
+                    {channel.created_at
+                      ? new Date(channel.created_at).toLocaleString()
                       : 'N/A'}
                   </p>
                 </div>
                 <div>
                   <h4 className="font-medium text-gray-700 mb-1">Updated At</h4>
                   <p className="text-gray-600">
-                    {channel.updated_at 
-                      ? new Date(channel.updated_at).toLocaleString() 
+                    {channel.updated_at
+                      ? new Date(channel.updated_at).toLocaleString()
                       : 'N/A'}
                   </p>
                 </div>

@@ -33,20 +33,20 @@ import {
 // Helper: extract file URL
 const extractFileUrl = (res) => {
   if (!res || typeof res !== 'object' || res === null || res instanceof Error) return null;
-  
+
   try {
     // Use 'in' operator and bracket notation to safely access properties
     if ('url' in res && res['url'] && typeof res['url'] === 'string') return res['url'];
     if ('path' in res && res['path'] && typeof res['path'] === 'string') return res['path'];
     if ('publicUrl' in res && res['publicUrl'] && typeof res['publicUrl'] === 'string') return res['publicUrl'];
     if ('signedUrl' in res && res['signedUrl'] && typeof res['signedUrl'] === 'string') return res['signedUrl'];
-    
+
     if ('data' in res && res['data'] && typeof res['data'] === 'object' && res['data'] !== null) {
       const data = res['data'];
       if ('url' in data && data['url'] && typeof data['url'] === 'string') return data['url'];
       if ('path' in data && data['path'] && typeof data['path'] === 'string') return data['path'];
     }
-    
+
     if ('file' in res && res['file'] && typeof res['file'] === 'object' && res['file'] !== null) {
       const file = res['file'];
       if ('url' in file && file['url'] && typeof file['url'] === 'string') return file['url'];
@@ -56,7 +56,7 @@ const extractFileUrl = (res) => {
     console.error('Error in extractFileUrl:', error);
     return null;
   }
-  
+
   return null;
 };
 
@@ -87,11 +87,11 @@ const EditBookScreen = ({ route, navigation }) => {
     const fetchBookData = async () => {
       try {
         setLoading(true);
-        
+
         if (isAudio && audioId) {
           const response = await apiClient.getAudioBook(audioId);
           const audio = response.audioBook;
-          
+
           if (audio && audio.author_id === userId) {
             setFormData({
               title: audio.title,
@@ -118,7 +118,7 @@ const EditBookScreen = ({ route, navigation }) => {
         } else if (bookId) {
           const response = await apiClient.getBook(bookId);
           const book = response.book;
-          
+
           if (book && book.author_id === userId) {
             setFormData({
               title: book.title,
@@ -393,8 +393,8 @@ const EditBookScreen = ({ route, navigation }) => {
               userId
             );
             // Safely extract URL using bracket notation and 'in' operator
-            const imageUrl = ('url' in uploadResult && uploadResult['url']) 
-              ? uploadResult['url'] 
+            const imageUrl = ('url' in uploadResult && uploadResult['url'])
+              ? uploadResult['url']
               : extractFileUrl(uploadResult);
             if (imageUrl) {
               coverImageUrls.push(imageUrl);
@@ -423,8 +423,8 @@ const EditBookScreen = ({ route, navigation }) => {
             userId
           );
           // Safely extract URL using bracket notation and 'in' operator
-          const audioUrl = ('url' in audioResult && audioResult['url']) 
-            ? audioResult['url'] 
+          const audioUrl = ('url' in audioResult && audioResult['url'])
+            ? audioResult['url']
             : extractFileUrl(audioResult);
           if (audioUrl) {
             audioBookData.audio_url = audioUrl;
@@ -455,8 +455,8 @@ const EditBookScreen = ({ route, navigation }) => {
               'covers'
             );
             // Safely extract URL using bracket notation and 'in' operator
-            const imageUrl = ('url' in uploadResult && uploadResult['url']) 
-              ? uploadResult['url'] 
+            const imageUrl = ('url' in uploadResult && uploadResult['url'])
+              ? uploadResult['url']
               : extractFileUrl(uploadResult);
             if (imageUrl) {
               coverImageUrls.push(imageUrl);
@@ -770,7 +770,7 @@ const EditBookScreen = ({ route, navigation }) => {
         multiline && styles.textArea,
         !editable && styles.inputDisabled
       ], [multiline, editable, styles.input, styles.textArea, styles.inputDisabled]);
-      
+
       return (
         <View style={styles.inputGroup}>
           <Text style={styles.label}>{label}</Text>

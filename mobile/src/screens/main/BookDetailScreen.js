@@ -33,6 +33,7 @@ const BookDetailScreen = ({ route, navigation }) => {
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [isPurchased, setIsPurchased] = useState(false);
   const [checkingPurchase, setCheckingPurchase] = useState(false);
+  const [hasActiveSubscription, setHasActiveSubscription] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const screenWidth = Dimensions.get('window').width;
   const isAuthor = userRole === 'author';
@@ -291,15 +292,18 @@ const BookDetailScreen = ({ route, navigation }) => {
     checkWishlist();
   }, [userId, bookId, isMyBook, userRole]);
 
-  // Check if book is already purchased
+  // Check if book is already purchased and check subscription status
   useEffect(() => {
     const checkPurchase = async () => {
       if (!userId || !bookId || isMyBook || userRole !== 'reader') {
         setIsPurchased(false);
+        setHasActiveSubscription(false);
         return;
       }
       try {
         setCheckingPurchase(true);
+        
+        // Check purchase status
         const response = await apiClient.getOrders(userId, { limit: 100 });
         const orders = response.orders || [];
         
@@ -312,9 +316,23 @@ const BookDetailScreen = ({ route, navigation }) => {
         });
         
         setIsPurchased(purchased);
+
+        // Check subscription status
+        try {
+          const subResponse = await apiClient.getUserSubscriptions(userId, 'active');
+          const activeSubs = subResponse.subscriptions || [];
+          const hasActive = activeSubs.some(
+            (sub) => sub.status === 'active' && (!sub.end_date || new Date(sub.end_date) > new Date())
+          );
+          setHasActiveSubscription(hasActive);
+        } catch (subError) {
+          console.error('Error checking subscription:', subError);
+          setHasActiveSubscription(false);
+        }
       } catch (error) {
         console.error('Error checking purchase:', error);
         setIsPurchased(false);
+        setHasActiveSubscription(false);
       } finally {
         setCheckingPurchase(false);
       }
@@ -502,16 +520,18 @@ const BookDetailScreen = ({ route, navigation }) => {
           <View style={styles.actionContainer}>
             {checkingPurchase ? (
               <ActivityIndicator size="small" color={themeColors.primary.main} />
-            ) : isPurchased || book.is_free ? (
-              // Book is purchased or free - Show Read button
+            ) : isPurchased || book.is_free || hasActiveSubscription ? (
+              // Book is purchased, free, or user has active subscription - Show Read button
               <TouchableOpacity
                 style={styles.readButton}
                 onPress={() => navigation.navigate('Reader', { bookId: book.id })}
               >
-                <Text style={styles.readButtonText}>Read</Text>
+                <Text style={styles.readButtonText}>
+                  {hasActiveSubscription && !isPurchased && !book.is_free ? 'Read (Subscription)' : 'Read'}
+                </Text>
               </TouchableOpacity>
             ) : (
-              // Book is not purchased - Show Buy Now button
+              // Book is not purchased and no subscription - Show Buy Now button
               <TouchableOpacity
                 style={styles.buyButton}
                 onPress={() => navigation.navigate('Payment', { bookId: book.id })}

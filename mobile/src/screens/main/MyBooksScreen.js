@@ -25,7 +25,7 @@ const MyBooksScreen = ({ navigation, route }) => {
   const themeColors = getThemeColors();
   const fontSizeMultiplier = getFontSizeMultiplier();
   const { initialTab } = route.params || {}; // 'books' or 'audio'
-  
+
   const [activeTab, setActiveTab] = useState(initialTab || 'books');
   const [books, setBooks] = useState([]);
   const [audioBooks, setAudioBooks] = useState([]);
@@ -175,10 +175,10 @@ const MyBooksScreen = ({ navigation, route }) => {
 
   const fetchData = async () => {
     if (!userId) return;
-    
+
     try {
       setLoading(true);
-      
+
       if (activeTab === 'books') {
         const response = await apiClient.getBooks({ authorId: userId, status: 'all', limit: 100 });
         setBooks(response.books || []);
@@ -201,11 +201,11 @@ const MyBooksScreen = ({ navigation, route }) => {
 
   const renderBookItem = ({ item }) => {
     const coverUrl = item.cover_images?.[0] || item.cover_image_url || item.cover || 'https://via.placeholder.com/80';
-    const statusColor = item.status === 'published' 
+    const statusColor = item.status === 'published'
       ? themeColors.success || '#4CAF50'
       : item.status === 'pending'
-      ? themeColors.warning || '#FF9800'
-      : themeColors.error || '#F44336';
+        ? themeColors.warning || '#FF9800'
+        : themeColors.error || '#F44336';
 
     return (
       <View style={styles.bookCard}>
@@ -252,11 +252,11 @@ const MyBooksScreen = ({ navigation, route }) => {
 
   const renderAudioBookItem = ({ item }) => {
     const coverUrl = item.cover_url || item.cover || 'https://via.placeholder.com/80';
-    const statusColor = item.status === 'published' 
+    const statusColor = item.status === 'published'
       ? themeColors.success || '#4CAF50'
       : item.status === 'pending'
-      ? themeColors.warning || '#FF9800'
-      : themeColors.error || '#F44336';
+        ? themeColors.warning || '#FF9800'
+        : themeColors.error || '#F44336';
 
     return (
       <View style={styles.bookCard}>
@@ -337,7 +337,7 @@ const MyBooksScreen = ({ navigation, route }) => {
               {activeTab === 'books' ? '📚' : '🎙️'}
             </Text>
             <Text style={styles.emptyStateText}>
-              {activeTab === 'books' 
+              {activeTab === 'books'
                 ? 'No books uploaded yet.\nStart uploading your first book!'
                 : 'No audio books uploaded yet.\nStart uploading your first audio book!'
               }

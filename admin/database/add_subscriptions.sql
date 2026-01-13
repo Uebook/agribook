@@ -71,9 +71,9 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
--- Insert default subscription types
+-- Insert default monthly subscription type
+-- Note: "Per Book Pay" is the default behavior (no subscription needed)
 INSERT INTO subscription_types (name, type, description, price, duration_days, features, is_active)
 VALUES 
-  ('Monthly Subscription', 'monthly', 'Unlimited access to all books for one month', 299.00, 30, '{"unlimited_books": true, "ad_free": true, "priority_support": true}'::jsonb, true),
-  ('Per Book Pay', 'per_book', 'Pay for individual books as you read', 0.00, NULL, '{"pay_per_book": true}'::jsonb, true)
+  ('Monthly Subscription', 'monthly', 'Unlimited access to all books for one month', 299.00, 30, '{"unlimited_books": true, "ad_free": true, "priority_support": true}'::jsonb, true)
 ON CONFLICT DO NOTHING;

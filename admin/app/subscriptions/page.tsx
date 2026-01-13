@@ -336,10 +336,13 @@ export default function SubscriptionsPage() {
                   onChange={handleInputChange}
                   required
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  disabled={editingSubscription !== null}
                 >
                   <option value="monthly">Monthly Subscription</option>
-                  <option value="per_book">Per Book Pay</option>
                 </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Note: Per Book Pay is the default option (no subscription needed)
+                </p>
               </div>
 
               <div className="mb-4">
