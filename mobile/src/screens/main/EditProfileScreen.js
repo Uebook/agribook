@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import ImagePicker from 'react-native-image-crop-picker';
 import { useAuth } from '../../context/AuthContext';
-import apiClient from '../../services/api';
+import axios from 'axios';
 
 const EditProfileScreen = ({ navigation, route }) => {
   // Get user from auth context or route params
@@ -44,8 +44,7 @@ const EditProfileScreen = ({ navigation, route }) => {
         : await ImagePicker.openPicker({ width: 1200, height: 1200, cropping: true, compressImageQuality: 0.6, });
 
       setAvatarUri(img.path);
-      const sizeInKB = (img.size / 1024).toFixed(2);
-      console.log(sizeInKB + " KB");
+
       setAvatarFile({
         path: img.path,
         mime: img.mime,
@@ -97,10 +96,28 @@ const EditProfileScreen = ({ navigation, route }) => {
 
       console.log('📤 Uploading profile with image to API...');
 
-      const res = await apiClient.updateProfile(formData);
+      const response = await axios.post(
+        'https://admin-orcin-omega.vercel.app/api/profile/update',
+        formData,
+        {
+          headers: {
+            'Accept': '*/*',
+            // Do NOT set Content-Type - axios will set it automatically with boundary for FormData
+          },
+          timeout: 90000, // 90 seconds for file uploads
+          maxContentLength: Infinity,
+          maxBodyLength: Infinity,
+        }
+      );
 
-      if (!res?.success) {
-        throw new Error(res?.message || res?.error || 'Update failed');
+      console.log('✅ Profile update response:', response.data);
+
+      if (!response?.data) {
+        throw new Error('No response from server');
+      }
+
+      if (!response.data.success) {
+        throw new Error(response.data.message || response.data.error || 'Update failed');
       }
 
       console.log('✅ Profile updated successfully');
@@ -112,18 +129,25 @@ const EditProfileScreen = ({ navigation, route }) => {
     } catch (err) {
       console.error('❌ Profile update error:', err);
 
-      Alert.alert(
-        'Error',
-        err?.response?.data?.message ||
-        err?.response?.data?.error ||
-        err?.message ||
-        'Profile update failed'
-      );
+      let errorMessage = 'Profile update failed';
+      
+      if (err?.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      } else if (err?.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (err?.message) {
+        errorMessage = err.message;
+      } else if (err?.request) {
+        errorMessage = 'No response from server. Please check your internet connection.';
+      }
+
+      Alert.alert('Error', errorMessage);
     } finally {
       setLoading(false);
       setUploading(false);
     }
   };
+
 
   return (
     <View style={styles.container}>
