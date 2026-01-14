@@ -65,10 +65,10 @@ export async function GET(request: NextRequest) {
       console.log('📊 PAYMENTS TABLE CHECK:');
       console.log('📊 Total payments in database (any status):', allPaymentsCount || 0);
       
-      // Check if payments table exists by trying to query it
-      const { data: payments, error: paymentsError, count: totalPaymentsCount } = await supabase
+      // Check if payments table exists by trying to query it with basic columns only
+      const { data: payments, error: paymentsError } = await supabase
         .from('payments')
-        .select('amount, status, book_id, audio_book_id, created_at, platform_commission, gst_amount, author_earnings', { count: 'exact', head: false })
+        .select('id, amount, status, book_id, audio_book_id, created_at, subscription_type_id', { count: 'exact', head: false })
         .limit(1);
       
       console.log('📊 Payments table check result:', paymentsError ? 'ERROR' : 'OK');
