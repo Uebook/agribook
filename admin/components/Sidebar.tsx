@@ -13,6 +13,7 @@ export default function Sidebar() {
         { href: '/authors', icon: '✍️', label: 'Authors' },
         { href: '/categories', icon: '🏷️', label: 'Categories' },
         { href: '/users', icon: '👥', label: 'Users' },
+        { href: '/notifications', icon: '🔔', label: 'Notifications' },
         { href: '/purchases', icon: '🛒', label: 'Purchased Books' },
         { href: '/subscription-purchases', icon: '💳', label: 'Subscription Purchases' },
         { href: '/subscriptions', icon: '⭐', label: 'Subscriptions' },

@@ -1,12 +1,57 @@
 /**
  * Notification Helper Utilities
  * Functions to create notifications for users
+ * Also sends Firebase push notifications
  */
 
 import { createServerClient } from '@/lib/supabase/client';
 
 /**
+ * Send Firebase push notification via API
+ */
+async function sendPushNotification(
+  user_id?: string,
+  user_ids?: string[],
+  role?: 'reader' | 'author' | 'admin',
+  title: string = '',
+  body: string = '',
+  data?: any
+) {
+  try {
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://admin-orcin-omega.vercel.app';
+    const response = await fetch(`${API_BASE_URL}/api/notifications/push`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        user_id,
+        user_ids,
+        role,
+        title,
+        body,
+        data,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      console.error('Error sending push notification:', error);
+      return false;
+    }
+
+    const result = await response.json();
+    console.log('Push notification sent:', result);
+    return true;
+  } catch (error) {
+    console.error('Error in sendPushNotification:', error);
+    return false;
+  }
+}
+
+/**
  * Send notification to a single user
+ * Also sends Firebase push notification
  */
 export async function sendNotificationToUser(
   userId: string,
@@ -37,6 +82,23 @@ export async function sendNotificationToUser(
       console.error('Error sending notification to user:', error);
       return false;
     }
+
+    // Also send Firebase push notification
+    await sendPushNotification(
+      userId,
+      undefined,
+      undefined,
+      title,
+      message,
+      {
+        icon: options?.icon || '🔔',
+        type: options?.type || 'info',
+        action_type: options?.action_type,
+        action_screen: options?.action_screen,
+        ...options?.action_params,
+      }
+    );
+
     return true;
   } catch (error) {
     console.error('Error in sendNotificationToUser:', error);
@@ -46,6 +108,7 @@ export async function sendNotificationToUser(
 
 /**
  * Send notification to all users with a specific role
+ * Also sends Firebase push notifications
  */
 export async function sendNotificationToRole(
   role: 'reader' | 'author' | 'admin',
@@ -96,6 +159,22 @@ export async function sendNotificationToRole(
       console.error('Error sending notifications to role:', error);
       return false;
     }
+
+    // Also send Firebase push notification to all users with this role
+    await sendPushNotification(
+      undefined,
+      undefined,
+      role,
+      title,
+      message,
+      {
+        icon: options?.icon || '🔔',
+        type: options?.type || 'info',
+        action_type: options?.action_type,
+        action_screen: options?.action_screen,
+        ...options?.action_params,
+      }
+    );
 
     console.log(`✅ Sent ${notifications.length} notifications to ${role} users`);
     return true;
