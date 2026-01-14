@@ -84,14 +84,15 @@ export async function GET(request: NextRequest) {
       } else if (!paymentsError) {
         console.log('✅ Payments table exists, proceeding with query...');
         // Table exists, fetch book/audio book payments (EXACT same query pattern as purchases API)
-        // Match the purchases API EXACTLY - same query, same filters
+        // Use select('*') to get all columns (like purchases API) - handles missing columns gracefully
         let paymentsQuery = supabase
           .from('payments')
-          .select('amount, status, book_id, audio_book_id, created_at, platform_commission, gst_amount, author_earnings, subscription_type_id, author_id')
+          .select('*') // Get all columns - matches purchases API exactly
           .eq('status', 'completed') // Only completed payments (same as purchases API)
           .is('subscription_type_id', null); // Exclude subscription purchases (same as purchases API)
         
         console.log('📊 Query filters: status=completed, subscription_type_id=null');
+        console.log('📊 Using select(*) to get all columns (handles missing columns gracefully)');
         
         // Apply date filtering if provided
         if (startDate) {
