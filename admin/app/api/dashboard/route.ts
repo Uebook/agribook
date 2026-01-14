@@ -56,24 +56,33 @@ export async function GET(request: NextRequest) {
     const authorRevenue: any[] = [];
     
     try {
+      // Debug: Get total count of all payments (any status) FIRST
+      const { count: allPaymentsCount } = await supabase
+        .from('payments')
+        .select('*', { count: 'exact', head: true });
+      
+      console.log('📊 ========================================');
+      console.log('📊 PAYMENTS TABLE CHECK:');
+      console.log('📊 Total payments in database (any status):', allPaymentsCount || 0);
+      
       // Check if payments table exists by trying to query it
       const { data: payments, error: paymentsError, count: totalPaymentsCount } = await supabase
         .from('payments')
         .select('amount, status, book_id, audio_book_id, created_at, platform_commission, gst_amount, author_earnings', { count: 'exact', head: false })
         .limit(1);
       
-      // Debug: Get total count of all payments (any status)
-      const { count: allPaymentsCount } = await supabase
-        .from('payments')
-        .select('*', { count: 'exact', head: true });
-      
-      console.log('📊 Total payments in database (any status):', allPaymentsCount || 0);
+      console.log('📊 Payments table check result:', paymentsError ? 'ERROR' : 'OK');
+      if (paymentsError) {
+        console.log('📊 Payments error code:', paymentsError.code);
+        console.log('📊 Payments error message:', paymentsError.message);
+      }
       
       // If table doesn't exist (PGRST116) or no error, try to fetch all payments
       if (paymentsError && paymentsError.code === 'PGRST116') {
         // Table doesn't exist, use defaults
         console.log('❌ Payments table not found, using default values');
       } else if (!paymentsError) {
+        console.log('✅ Payments table exists, proceeding with query...');
         // Table exists, fetch book/audio book payments (EXACT same query pattern as purchases API)
         // Match the purchases API EXACTLY - same query, same filters
         let paymentsQuery = supabase
@@ -81,6 +90,8 @@ export async function GET(request: NextRequest) {
           .select('amount, status, book_id, audio_book_id, created_at, platform_commission, gst_amount, author_earnings, subscription_type_id, author_id')
           .eq('status', 'completed') // Only completed payments (same as purchases API)
           .is('subscription_type_id', null); // Exclude subscription purchases (same as purchases API)
+        
+        console.log('📊 Query filters: status=completed, subscription_type_id=null');
         
         // Apply date filtering if provided
         if (startDate) {
@@ -314,7 +325,13 @@ export async function GET(request: NextRequest) {
         }
       }
     } catch (paymentsError) {
-      console.warn('Could not fetch payments:', paymentsError);
+      console.error('❌ ========================================');
+      console.error('❌ ERROR IN PAYMENTS TRY-CATCH BLOCK:');
+      console.error('❌ ========================================');
+      console.error('❌ Error:', paymentsError);
+      console.error('❌ Error message:', paymentsError instanceof Error ? paymentsError.message : String(paymentsError));
+      console.error('❌ Error stack:', paymentsError instanceof Error ? paymentsError.stack : 'N/A');
+      console.error('❌ ========================================');
       // Continue with default values
     }
 
