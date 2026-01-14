@@ -165,7 +165,7 @@ export default function DashboardPage() {
           <Sidebar />
           <main className="flex-1 p-8">
             <div className="flex items-center justify-center h-64">
-              <div className="text-gray-500">Loading dashboard...</div>
+              <div className="text-black">Loading dashboard...</div>
             </div>
           </main>
         </div>
@@ -197,7 +197,7 @@ export default function DashboardPage() {
         <main className="flex-1 p-8">
           <div className="max-w-7xl mx-auto">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-3xl font-bold text-gray-900">Dashboard</h2>
+              <h2 className="text-3xl font-bold text-black">Dashboard</h2>
               
               {/* Date Filter */}
               <div className="flex gap-4">
@@ -205,14 +205,14 @@ export default function DashboardPage() {
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg"
+                  className="px-3 py-2 border border-black rounded-lg"
                   placeholder="Start Date"
                 />
                 <input
                   type="date"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg"
+                  className="px-3 py-2 border border-black rounded-lg"
                   placeholder="End Date"
                 />
               </div>
@@ -228,7 +228,7 @@ export default function DashboardPage() {
                 >
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-gray-500 text-sm mb-1">{card.title}</p>
+                      <p className="text-black text-sm mb-1">{card.title}</p>
                       <p className={`text-2xl font-bold ${card.color.replace('bg-', 'text-')}`}>
                         {card.value}
                       </p>
@@ -244,11 +244,11 @@ export default function DashboardPage() {
             {/* Author Revenue Chart Placeholder */}
             {stats.authorRevenue.length > 0 && (
               <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
-                <h3 className="text-xl font-bold text-gray-900 mb-4">Author Revenue</h3>
+                <h3 className="text-xl font-bold text-black mb-4">Author Revenue</h3>
                 <div className="space-y-2">
                   {stats.authorRevenue.map((author: any) => (
                     <div key={author.authorId} className="flex items-center justify-between">
-                      <span className="text-gray-700">{author.authorName}</span>
+                      <span className="text-black">{author.authorName}</span>
                       <span className="font-semibold">₹{author.revenue.toLocaleString()}</span>
                     </div>
                   ))}
