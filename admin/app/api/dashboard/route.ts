@@ -243,7 +243,7 @@ export async function GET(request: NextRequest) {
             totalPlatformCommission += platformCommission;
             totalGST += gstAmount;
             totalAuthorEarnings += authorEarnings;
-            
+          
             console.log(`💰 Running totals: Commission=${totalPlatformCommission}, GST=${totalGST}, Earnings=${totalAuthorEarnings}`);
           }
           

@@ -14,6 +14,7 @@ export default function Sidebar() {
         { href: '/categories', icon: '🏷️', label: 'Categories' },
         { href: '/users', icon: '👥', label: 'Users' },
         { href: '/notifications', icon: '🔔', label: 'Notifications' },
+        { href: '/website', icon: '🌐', label: 'Website' },
         { href: '/purchases', icon: '🛒', label: 'Purchased Books' },
         { href: '/subscription-purchases', icon: '💳', label: 'Subscription Purchases' },
         { href: '/subscriptions', icon: '⭐', label: 'Subscriptions' },

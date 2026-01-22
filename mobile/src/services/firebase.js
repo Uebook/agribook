@@ -3,13 +3,20 @@
  * Handles FCM token registration and notification handling
  */
 
-import { Platform, PermissionsAndroid } from 'react-native';
+import { Platform, PermissionsAndroid, Alert } from 'react-native';
 import apiClient from './api';
 
 // Conditional import - Firebase will be available after npm install
 let messaging = null;
+let notifications = null;
 try {
     messaging = require('@react-native-firebase/messaging').default;
+    // Try to import notifications module (optional, for better notification display)
+    try {
+        notifications = require('@react-native-firebase/notifications').default;
+    } catch (e) {
+        console.log('📱 Notifications module not available, using basic display');
+    }
 } catch (error) {
     console.warn('⚠️ Firebase messaging not installed. Run: npm install @react-native-firebase/app @react-native-firebase/messaging');
 }
@@ -149,11 +156,53 @@ class FirebaseService {
                 }
             });
 
-            // Handle foreground messages
+            // Handle foreground messages - show notification when app is active
             this.onMessageListener = messaging().onMessage(async (remoteMessage) => {
                 console.log('📨 Foreground message received:', remoteMessage);
-                // You can show a local notification here if needed
-                // For now, the app will handle it through the notification system
+
+                const title = remoteMessage.notification?.title || remoteMessage.data?.title || 'New Notification';
+                const body = remoteMessage.notification?.body || remoteMessage.data?.body || remoteMessage.data?.message || 'You have a new message';
+
+                // Show local notification when app is in foreground
+                if (notifications) {
+                    try {
+                        // Create a notification channel for Android (required for Android 8.0+)
+                        if (Platform.OS === 'android') {
+                            await notifications().createChannel({
+                                channelId: 'default',
+                                channelName: 'Default Channel',
+                                sound: 'default',
+                                importance: 4, // High importance
+                                vibration: true,
+                            });
+                        }
+
+                        // Display the notification
+                        await notifications().displayNotification({
+                            title: title,
+                            body: body,
+                            data: remoteMessage.data || {},
+                            android: {
+                                channelId: 'default',
+                                priority: 'high',
+                                sound: 'default',
+                                // Image support (if notifications module supports it)
+                                // Note: Image display may require additional setup
+                            },
+                            ios: {
+                                sound: 'default',
+                            },
+                        });
+                        console.log('✅ Foreground notification displayed');
+                    } catch (error) {
+                        console.error('❌ Error displaying foreground notification:', error);
+                        // Fallback to Alert if notification display fails
+                        this.showForegroundAlert(title, body, remoteMessage.data);
+                    }
+                } else {
+                    // Fallback: Show Alert for foreground notifications
+                    this.showForegroundAlert(title, body, remoteMessage.data);
+                }
             });
 
             // Handle notification opened from background/quit state
@@ -181,6 +230,28 @@ class FirebaseService {
             console.error('Error initializing Firebase messaging:', error);
             return false;
         }
+    }
+
+    /**
+     * Show alert for foreground notifications (fallback)
+     */
+    showForegroundAlert(title, body, data) {
+        Alert.alert(
+            title,
+            body,
+            [
+                {
+                    text: 'OK',
+                    onPress: () => {
+                        if (data && data.screen) {
+                            // Handle navigation if needed
+                            console.log('Navigate to:', data.screen, data.params);
+                        }
+                    },
+                },
+            ],
+            { cancelable: true }
+        );
     }
 
     /**

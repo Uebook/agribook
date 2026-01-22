@@ -1,6 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/client';
 
+function getCorsHeaders() {
+  return {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  };
+}
+
+export async function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, {
+    status: 200,
+    headers: getCorsHeaders(),
+  });
+}
+
 // GET /api/categories - List categories with pagination
 export async function GET(request: NextRequest) {
   try {
@@ -23,11 +38,11 @@ export async function GET(request: NextRequest) {
       console.error('Error fetching categories:', error);
       return NextResponse.json(
         { error: 'Failed to fetch categories' },
-        { status: 500 }
+        { status: 500, headers: getCorsHeaders() }
       );
     }
     
-    return NextResponse.json({
+    const response = NextResponse.json({
       categories: categories || [],
       pagination: {
         page,
@@ -35,12 +50,13 @@ export async function GET(request: NextRequest) {
         total: count || 0,
         totalPages: Math.ceil((count || 0) / limit),
       },
-    });
+    }, { headers: getCorsHeaders() });
+    return response;
   } catch (error) {
     console.error('Error in GET /api/categories:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
-      { status: 500 }
+      { status: 500, headers: getCorsHeaders() }
     );
   }
 }
@@ -57,7 +73,7 @@ export async function POST(request: NextRequest) {
     if (!name) {
       return NextResponse.json(
         { error: 'Category name is required' },
-        { status: 400 }
+        { status: 400, headers: getCorsHeaders() }
       );
     }
     
@@ -71,7 +87,7 @@ export async function POST(request: NextRequest) {
     if (existingCategory) {
       return NextResponse.json(
         { error: 'Category with this name already exists' },
-        { status: 400 }
+        { status: 400, headers: getCorsHeaders() }
       );
     }
     
@@ -105,16 +121,16 @@ export async function POST(request: NextRequest) {
       console.error('Supabase error details:', JSON.stringify(error, null, 2));
       return NextResponse.json(
         { error: 'Failed to create category', details: error.message },
-        { status: 500 }
+        { status: 500, headers: getCorsHeaders() }
       );
     }
     
-    return NextResponse.json({ category }, { status: 201 });
+    return NextResponse.json({ category }, { status: 201, headers: getCorsHeaders() });
   } catch (error) {
     console.error('Error in POST /api/categories:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
-      { status: 500 }
+      { status: 500, headers: getCorsHeaders() }
     );
   }
 }

@@ -1,6 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/client';
 
+function getCorsHeaders() {
+  return {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  };
+}
+
+export async function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, {
+    status: 200,
+    headers: getCorsHeaders(),
+  });
+}
+
 // GET /api/categories/[id] - Get single category
 export async function GET(
   request: NextRequest,
@@ -20,11 +35,11 @@ export async function GET(
       console.error('Error fetching category:', error);
       return NextResponse.json(
         { error: 'Category not found' },
-        { status: 404 }
+        { status: 404, headers: getCorsHeaders() }
       );
     }
     
-    return NextResponse.json({ category });
+    return NextResponse.json({ category }, { headers: getCorsHeaders() });
   } catch (error) {
     console.error('Error in GET /api/categories/[id]:', error);
     return NextResponse.json(
@@ -56,7 +71,7 @@ export async function PUT(
     if (!existingCategory) {
       return NextResponse.json(
         { error: 'Category not found' },
-        { status: 404 }
+        { status: 404, headers: getCorsHeaders() }
       );
     }
     
@@ -72,7 +87,7 @@ export async function PUT(
       if (duplicateCategory) {
         return NextResponse.json(
           { error: 'Category with this name already exists' },
-          { status: 400 }
+          { status: 400, headers: getCorsHeaders() }
         );
       }
     }
@@ -108,11 +123,11 @@ export async function PUT(
       console.error('Supabase error details:', JSON.stringify(error, null, 2));
       return NextResponse.json(
         { error: 'Failed to update category', details: error.message },
-        { status: 500 }
+        { status: 500, headers: getCorsHeaders() }
       );
     }
     
-    return NextResponse.json({ category });
+    return NextResponse.json({ category }, { headers: getCorsHeaders() });
   } catch (error) {
     console.error('Error in PUT /api/categories/[id]:', error);
     return NextResponse.json(
@@ -141,7 +156,7 @@ export async function DELETE(
     if (!existingCategory) {
       return NextResponse.json(
         { error: 'Category not found' },
-        { status: 404 }
+        { status: 404, headers: getCorsHeaders() }
       );
     }
     
@@ -155,7 +170,7 @@ export async function DELETE(
     if (booksUsingCategory && booksUsingCategory.length > 0) {
       return NextResponse.json(
         { error: 'Cannot delete category: It is being used by books' },
-        { status: 400 }
+        { status: 400, headers: getCorsHeaders() }
       );
     }
     
@@ -169,11 +184,11 @@ export async function DELETE(
       console.error('Error deleting category:', error);
       return NextResponse.json(
         { error: 'Failed to delete category' },
-        { status: 500 }
+        { status: 500, headers: getCorsHeaders() }
       );
     }
     
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true }, { headers: getCorsHeaders() });
   } catch (error) {
     console.error('Error in DELETE /api/categories/[id]:', error);
     return NextResponse.json(
