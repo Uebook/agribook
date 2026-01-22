@@ -160,7 +160,7 @@ export default function WebsitePage() {
     setContent({ ...content, [field]: value });
   };
 
-  const handleArrayChange = (field: 'featured_book_ids' | 'featured_author_ids' | 'features' | 'statistics' | 'about_features', value: any[]) => {
+  const handleArrayChange = (field: 'featured_book_ids' | 'featured_author_ids' | 'features' | 'statistics' | 'about_features' | 'navigation_links' | 'footer_quick_links' | 'footer_categories', value: any[]) => {
     setContent({ ...content, [field]: value });
   };
 
@@ -560,7 +560,10 @@ export default function WebsitePage() {
       // Upload hero image if a new file was selected
       let heroImageUrl = content.hero_image_url;
       if (heroImageFile) {
-        heroImageUrl = await uploadHeroImage();
+        const uploadedUrl = await uploadHeroImage();
+        if (uploadedUrl) {
+          heroImageUrl = uploadedUrl;
+        }
       }
       
       // Upload feature images
@@ -584,7 +587,10 @@ export default function WebsitePage() {
       // Upload about image
       let aboutImageUrl = content.about_image_url;
       if (aboutImageFile) {
-        aboutImageUrl = await uploadAboutImage();
+        const uploadedUrl = await uploadAboutImage();
+        if (uploadedUrl) {
+          aboutImageUrl = uploadedUrl;
+        }
       }
       
       const saveData = { ...content };
