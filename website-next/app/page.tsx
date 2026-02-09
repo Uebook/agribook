@@ -5,16 +5,18 @@ import type { Book, Author, Category } from '@/lib/api/types';
 
 async function getData() {
   try {
-    const [booksRes, authorsRes, categoriesRes] = await Promise.all([
+    const [booksRes, authorsRes, categoriesRes, websiteRes] = await Promise.all([
       apiClient.getFeaturedBooks(6),
       apiClient.getFeaturedAuthors(4),
       apiClient.getCategories(),
+      apiClient.getWebsiteContent(),
     ]);
 
     return {
       books: booksRes.books || [],
       authors: authorsRes.authors || [],
       categories: categoriesRes.categories || [],
+      websiteContent: websiteRes,
     };
   } catch (error) {
     console.error('Error fetching data:', error);
@@ -22,12 +24,13 @@ async function getData() {
       books: [],
       authors: [],
       categories: [],
+      websiteContent: null,
     };
   }
 }
 
 export default async function Home() {
-  const { books, authors, categories } = await getData();
+  const { books, authors, categories, websiteContent } = await getData();
 
   return (
     <main className="min-h-screen">
@@ -37,47 +40,53 @@ export default async function Home() {
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <div>
               <h1 className="text-5xl font-bold text-gray-900 mb-6">
-                Your Agricultural Knowledge Hub
+                {websiteContent?.hero_title || 'Your Agricultural Knowledge Hub'}
               </h1>
               <p className="text-xl text-gray-600 mb-8">
-                Discover thousands of eBooks, audiobooks, and expert resources to transform your farming practices
+                {websiteContent?.hero_subtitle || 'Discover thousands of eBooks, audiobooks, and expert resources to transform your farming practices'}
               </p>
               <div className="flex gap-4">
                 <Link
-                  href="#books"
+                  href={websiteContent?.hero_button_1_link || '#books'}
                   className="bg-green-600 text-white px-8 py-3 rounded-lg font-medium hover:bg-green-700 transition-colors"
                 >
-                  Explore Books
+                  {websiteContent?.hero_button_1_text || 'Explore Books'}
                 </Link>
                 <Link
-                  href="#features"
+                  href={websiteContent?.hero_button_2_link || '#features'}
                   className="border-2 border-green-600 text-green-600 px-8 py-3 rounded-lg font-medium hover:bg-green-50 transition-colors"
                 >
-                  Learn More
+                  {websiteContent?.hero_button_2_text || 'Learn More'}
                 </Link>
               </div>
 
               {/* Stats */}
               <div className="grid grid-cols-3 gap-8 mt-12">
-                <div>
-                  <div className="text-4xl font-bold text-green-600">{books.length > 0 ? '500+' : '0'}</div>
-                  <div className="text-gray-600 mt-1">Books</div>
-                </div>
-                <div>
-                  <div className="text-4xl font-bold text-green-600">{authors.length > 0 ? '50+' : '0'}</div>
-                  <div className="text-gray-600 mt-1">Authors</div>
-                </div>
-                <div>
-                  <div className="text-4xl font-bold text-green-600">10K+</div>
-                  <div className="text-gray-600 mt-1">Readers</div>
+                <div className="grid grid-cols-3 gap-8 mt-12">
+                  <div>
+                    <div className="text-4xl font-bold text-green-600">
+                      {websiteContent?.stat_books && websiteContent.stat_books > 0 ? `${websiteContent.stat_books}+` : (books.length > 0 ? `${books.length}+` : '500+')}
+                    </div>
+                    <div className="text-gray-600 mt-1">Books</div>
+                  </div>
+                  <div>
+                    <div className="text-4xl font-bold text-green-600">
+                      {websiteContent?.stat_authors && websiteContent.stat_authors > 0 ? `${websiteContent.stat_authors}+` : (authors.length > 0 ? `${authors.length}+` : '50+')}
+                    </div>
+                    <div className="text-gray-600 mt-1">Authors</div>
+                  </div>
+                  <div>
+                    <div className="text-4xl font-bold text-green-600">{websiteContent?.stat_readers ? `${websiteContent.stat_readers}+` : '10K+'}</div>
+                    <div className="text-gray-600 mt-1">Readers</div>
+                  </div>
                 </div>
               </div>
             </div>
 
             <div className="relative h-96 rounded-2xl overflow-hidden shadow-2xl">
               <Image
-                src="https://images.unsplash.com/photo-1464226184884-fa280b87c399?w=800&h=600&fit=crop"
-                alt="Agricultural Books"
+                src={websiteContent?.hero_image_url || "https://images.unsplash.com/photo-1464226184884-fa280b87c399?w=800&h=600&fit=crop"}
+                alt={websiteContent?.hero_title || "Agricultural Books"}
                 fill
                 className="object-cover"
               />
@@ -90,8 +99,8 @@ export default async function Home() {
       <section id="categories" className="py-20 bg-white">
         <div className="container mx-auto px-4">
           <div className="text-center mb-12">
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">Explore Categories</h2>
-            <p className="text-xl text-gray-600">Find books in your area of interest</p>
+            <h2 className="text-4xl font-bold text-gray-900 mb-4">{websiteContent?.categories_title || 'Explore Categories'}</h2>
+            <p className="text-xl text-gray-600">{websiteContent?.categories_subtitle || 'Find books in your area of interest'}</p>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
@@ -113,8 +122,8 @@ export default async function Home() {
       <section id="books" className="py-20 bg-gray-50">
         <div className="container mx-auto px-4">
           <div className="text-center mb-12">
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">Featured Books</h2>
-            <p className="text-xl text-gray-600">Discover our most popular agricultural books</p>
+            <h2 className="text-4xl font-bold text-gray-900 mb-4">{websiteContent?.books_title || 'Featured Books'}</h2>
+            <p className="text-xl text-gray-600">{websiteContent?.books_subtitle || 'Discover our most popular agricultural books'}</p>
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -148,8 +157,8 @@ export default async function Home() {
       <section id="authors" className="py-20 bg-white">
         <div className="container mx-auto px-4">
           <div className="text-center mb-12">
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">Meet Our Authors</h2>
-            <p className="text-xl text-gray-600">Learn from agricultural experts and industry leaders</p>
+            <h2 className="text-4xl font-bold text-gray-900 mb-4">{websiteContent?.authors_title || 'Meet Our Authors'}</h2>
+            <p className="text-xl text-gray-600">{websiteContent?.authors_subtitle || 'Learn from agricultural experts and industry leaders'}</p>
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
@@ -174,22 +183,22 @@ export default async function Home() {
       {/* CTA Section */}
       <section className="py-20 bg-gradient-to-r from-green-600 to-blue-600 text-white">
         <div className="container mx-auto px-4 text-center">
-          <h2 className="text-4xl font-bold mb-4">Start Your Agricultural Journey Today</h2>
+          <h2 className="text-4xl font-bold mb-4">{websiteContent?.cta_title || 'Start Your Agricultural Journey Today'}</h2>
           <p className="text-xl mb-8 opacity-90">
-            Join thousands of farmers and agricultural enthusiasts learning and growing with Agribook
+            {websiteContent?.cta_subtitle || 'Join thousands of farmers and agricultural enthusiasts learning and growing with Agribook'}
           </p>
           <div className="flex gap-4 justify-center">
             <Link
-              href="#books"
+              href={websiteContent?.cta_button_1_link || "#books"}
               className="bg-white text-green-600 px-8 py-3 rounded-lg font-medium hover:bg-gray-100 transition-colors"
             >
-              Browse Books
+              {websiteContent?.cta_button_1_text || 'Browse Books'}
             </Link>
             <Link
-              href="/admin"
+              href={websiteContent?.cta_button_2_link || "/admin"}
               className="border-2 border-white text-white px-8 py-3 rounded-lg font-medium hover:bg-white/10 transition-colors"
             >
-              Admin Panel
+              {websiteContent?.cta_button_2_text || 'Admin Panel'}
             </Link>
           </div>
         </div>

@@ -47,10 +47,54 @@ export interface AudioBook {
 }
 
 export interface WebsiteContent {
-    platform_name: string;
-    support_email: string;
-    logo_url?: string;
-    about_description?: string;
+    id?: string | null;
+    logo_url?: string | null;
+    logo_text?: string;
+    hero_title?: string;
+    hero_subtitle?: string;
+    hero_image_url?: string | null;
+    hero_button_1_text?: string;
+    hero_button_1_link?: string;
+    hero_button_2_text?: string;
+    hero_button_2_link?: string;
+    stat_books?: number;
+    stat_authors?: number;
+    stat_readers?: number;
+    features_title?: string;
+    features_subtitle?: string;
+    features?: any[];
+    categories_title?: string;
+    categories_subtitle?: string;
+    featured_category_ids?: string[];
+    books_title?: string;
+    books_subtitle?: string;
+    featured_book_ids?: string[];
+    authors_title?: string;
+    authors_subtitle?: string;
+    featured_author_ids?: string[];
+    statistics?: any[];
+    about_title?: string;
+    about_description?: string | null;
+    about_image_url?: string | null;
+    about_features?: any[];
+    cta_title?: string;
+    cta_subtitle?: string;
+    cta_button_1_text?: string;
+    cta_button_1_link?: string;
+    cta_button_2_text?: string;
+    cta_button_2_link?: string;
+    footer_description?: string;
+    footer_email?: string;
+    footer_phone?: string;
+    footer_support_email?: string;
+    footer_copyright?: string;
+    navigation_links?: any[];
+    footer_quick_links?: any[];
+    footer_categories?: any[];
+    android_app_url?: string | null;
+    ios_app_url?: string | null;
+    meta_title?: string;
+    meta_description?: string;
 }
 
 export interface ApiResponse<T> {

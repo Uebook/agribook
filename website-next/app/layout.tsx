@@ -2,19 +2,38 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import Link from "next/link";
+import Image from "next/image";
+import apiClient from "@/lib/api/client";
 
 const inter = Inter({ subsets: ["latin"] });
 
-export const metadata: Metadata = {
-  title: "Agribook - Your Agricultural Knowledge Hub",
-  description: "Discover thousands of agricultural eBooks, audiobooks, and resources. Learn from experts and grow your farming knowledge.",
-};
+export async function generateMetadata() {
+  try {
+    const websiteContent = await apiClient.getWebsiteContent();
+    return {
+      title: websiteContent?.meta_title || "Agribook - Your Agricultural Knowledge Hub",
+      description: websiteContent?.meta_description || "Discover thousands of agricultural eBooks, audiobooks, and resources.",
+    };
+  } catch (error) {
+    return {
+      title: "Agribook - Your Agricultural Knowledge Hub",
+      description: "Discover thousands of agricultural eBooks, audiobooks, and resources.",
+    };
+  }
+}
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  let websiteContent = null;
+  try {
+    websiteContent = await apiClient.getWebsiteContent();
+  } catch (error) {
+    console.error("Failed to fetch website content for layout:", error);
+  }
+
   return (
     <html lang="en">
       <body className={inter.className}>
@@ -22,8 +41,11 @@ export default function RootLayout({
         <nav className="bg-white shadow-sm sticky top-0 z-50">
           <div className="container mx-auto px-4">
             <div className="flex items-center justify-between h-16">
-              <Link href="/" className="text-2xl font-bold text-green-600">
-                Agribook
+              <Link href="/" className="text-2xl font-bold text-green-600 flex items-center gap-2">
+                {websiteContent?.logo_url && (
+                  <Image src={websiteContent.logo_url} alt="Logo" width={32} height={32} className="object-contain" />
+                )}
+                <span>{websiteContent?.logo_text || 'Agribook'}</span>
               </Link>
 
               <div className="hidden md:flex items-center space-x-8">
@@ -51,8 +73,8 @@ export default function RootLayout({
           <div className="container mx-auto px-4">
             <div className="grid md:grid-cols-4 gap-8">
               <div>
-                <h3 className="text-2xl font-bold mb-4">Agribook</h3>
-                <p className="text-gray-400">Your trusted partner in agricultural knowledge and growth.</p>
+                <h3 className="text-2xl font-bold mb-4">{websiteContent?.logo_text || 'Agribook'}</h3>
+                <p className="text-gray-400">{websiteContent?.footer_description || 'Your trusted partner in agricultural knowledge and growth.'}</p>
               </div>
 
               <div>
@@ -76,14 +98,14 @@ export default function RootLayout({
               <div>
                 <h4 className="font-semibold mb-4">Contact</h4>
                 <ul className="space-y-2 text-gray-400">
-                  <li>Email: support@agribook.com</li>
-                  <li>Phone: +91 1234567890</li>
+                  <li>Email: {websiteContent?.footer_email || 'support@agribook.com'}</li>
+                  <li>Phone: {websiteContent?.footer_phone || '+91 1234567890'}</li>
                 </ul>
               </div>
             </div>
 
             <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
-              <p>&copy; 2024 Agribook. All rights reserved.</p>
+              <p>{websiteContent?.footer_copyright || `© ${new Date().getFullYear()} Agribook. All rights reserved.`}</p>
             </div>
           </div>
         </footer>
