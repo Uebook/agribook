@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-const PUBLIC_PATHS = ['/login'];
+const PUBLIC_PATHS = ['/admin/login', '/login'];
 const AUTH_API_PATHS = [
   '/api/auth/login',
   '/api/auth/register',
@@ -10,7 +10,7 @@ const AUTH_API_PATHS = [
 ];
 
 function isPublicPath(pathname: string) {
-  return PUBLIC_PATHS.some((path) => pathname === path);
+  return PUBLIC_PATHS.some((path) => pathname === path || pathname === path + '/');
 }
 
 function isAuthApiPath(pathname: string) {
@@ -47,12 +47,12 @@ export function middleware(request: NextRequest) {
 
   // Redirect authenticated users away from login page
   if (isPublicPath(pathname) && isAuthenticated) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+    return NextResponse.redirect(new URL('/admin/dashboard', request.url));
   }
 
   // Redirect unauthenticated users to login (except public paths)
   if (!isAuthenticated && !isPublicPath(pathname)) {
-    return NextResponse.redirect(new URL('/login', request.url));
+    return NextResponse.redirect(new URL('/admin/login', request.url));
   }
 
   return NextResponse.next();

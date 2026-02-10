@@ -32,10 +32,10 @@ npm install
 cd ..
 ```
 
-### Install website dependencies (if any)
+### Install website dependencies
 ```bash
 cd website
-# No dependencies needed for static site
+npm install
 cd ..
 ```
 
@@ -44,19 +44,15 @@ cd ..
 ### Admin Panel Environment
 ```bash
 cd admin
-cp .env.local.example .env.local  # if example exists, or create new
-nano .env.local
+# Use the committed .env.production or create .env.local
+ls -la .env.production
 ```
 
-Add your Supabase credentials:
+Ensure your Supabase credentials in `.env.production` are correct:
 ```env
-# Supabase Configuration
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_URL=https://isndoxsyjbdzibhkrisj.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
-
-# App Configuration
-NEXT_PUBLIC_APP_URL=https://yourdomain.com
 ```
 
 ## Step 4: Build the Admin Panel
@@ -93,6 +89,16 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         PORT: 3001
+      }
+    },
+    {
+      name: 'agribook-website',
+      cwd: './website',
+      script: 'npm',
+      args: 'start',
+      env: {
+        NODE_ENV: 'production',
+        PORT: 3002
       }
     },
     {

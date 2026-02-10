@@ -2,21 +2,26 @@
 
 # Start the admin panel on port 3001
 echo "Starting admin panel on port 3001..."
-cd admin && npm run dev &
+(cd admin && npm run dev) &
 ADMIN_PID=$!
 
-# Wait a bit for admin to start
-sleep 3
+# Start the website on port 3002
+echo "Starting website on port 3002..."
+(cd website-next && npm run dev) &
+WEBSITE_PID=$!
+
+# Wait a bit for services to start
+sleep 5
 
 # Start the proxy server on port 3000
 echo "Starting proxy server on port 3000..."
-cd .. && node server.js &
+node server.js &
 PROXY_PID=$!
 
 # Function to cleanup on exit
 cleanup() {
     echo "Shutting down servers..."
-    kill $ADMIN_PID $PROXY_PID 2>/dev/null
+    kill $ADMIN_PID $WEBSITE_PID $PROXY_PID 2>/dev/null
     exit
 }
 
