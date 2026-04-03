@@ -38,28 +38,30 @@ export default async function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         {/* Navigation */}
-        <nav className="bg-white shadow-sm sticky top-0 z-50">
+        <nav className="glass sticky top-0 z-50 border-b border-foreground/5 shadow-sm">
           <div className="container mx-auto px-4">
-            <div className="flex items-center justify-between h-16">
-              <Link href="/" className="text-2xl font-bold text-green-600 flex items-center gap-2">
+            <div className="flex items-center justify-between h-20">
+              <Link href="/" className="text-3xl font-black text-primary flex items-center gap-3 hover:scale-105 transition-transform">
                 {websiteContent?.logo_url && (
-                  <Image src={websiteContent.logo_url} alt="Logo" width={32} height={32} className="object-contain" />
+                  <div className="w-10 h-10 relative">
+                    <Image src={websiteContent.logo_url} alt="Logo" fill className="object-contain" />
+                  </div>
                 )}
-                <span>{websiteContent?.logo_text || 'Agribook'}</span>
+                <span className="tracking-tight">{websiteContent?.logo_text || 'Agribook'}</span>
               </Link>
 
-              <div className="hidden md:flex items-center space-x-8">
-                <Link href="/#categories" className="text-gray-700 hover:text-green-600 transition-colors">
+              <div className="hidden md:flex items-center space-x-10">
+                <Link href="/#categories" className="text-sm font-bold text-muted-foreground hover:text-primary transition-all">
                   Categories
                 </Link>
-                <Link href="/#books" className="text-gray-700 hover:text-green-600 transition-colors">
+                <Link href="/#books" className="text-sm font-bold text-muted-foreground hover:text-primary transition-all">
                   Books
                 </Link>
-                <Link href="/#authors" className="text-gray-700 hover:text-green-600 transition-colors">
+                <Link href="/#authors" className="text-sm font-bold text-muted-foreground hover:text-primary transition-all">
                   Authors
                 </Link>
-                <Link href="/admin" className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors">
-                  Admin
+                <Link href="/admin" className="bg-primary text-white px-8 py-3 rounded-xl font-bold hover:bg-primary-vibrant transition-all shadow-premium text-sm">
+                  Admin Portal
                 </Link>
               </div>
             </div>
@@ -69,43 +71,79 @@ export default async function RootLayout({
         {children}
 
         {/* Footer */}
-        <footer className="bg-gray-900 text-white py-12">
-          <div className="container mx-auto px-4">
-            <div className="grid md:grid-cols-4 gap-8">
-              <div>
-                <h3 className="text-2xl font-bold mb-4">{websiteContent?.logo_text || 'Agribook'}</h3>
-                <p className="text-gray-400">{websiteContent?.footer_description || 'Your trusted partner in agricultural knowledge and growth.'}</p>
+        <footer className="bg-gray-950 text-white pt-24 pb-12 relative overflow-hidden">
+          {/* Decorative element */}
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
+
+          <div className="container mx-auto px-4 relative z-10">
+            <div className="grid md:grid-cols-4 gap-16 mb-20">
+              <div className="col-span-1 md:col-span-1">
+                <h3 className="text-3xl font-black mb-6 text-white tracking-tight">{websiteContent?.logo_text || 'Agribook'}</h3>
+                <p className="text-muted-foreground/80 leading-relaxed mb-8">
+                  {websiteContent?.footer_description || 'Your trusted partner in agricultural knowledge and growth. Empowering farmers globally.'}
+                </p>
+                <div className="flex gap-4">
+                  <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-primary/20 transition-colors cursor-pointer border border-white/10">
+                    <span className="text-xl">🐦</span>
+                  </div>
+                  <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-primary/20 transition-colors cursor-pointer border border-white/10">
+                    <span className="text-xl">📘</span>
+                  </div>
+                  <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-primary/20 transition-colors cursor-pointer border border-white/10">
+                    <span className="text-xl">📸</span>
+                  </div>
+                </div>
               </div>
 
               <div>
-                <h4 className="font-semibold mb-4">Quick Links</h4>
-                <ul className="space-y-2 text-gray-400">
-                  <li><Link href="/#categories" className="hover:text-white transition-colors">Categories</Link></li>
-                  <li><Link href="/#books" className="hover:text-white transition-colors">Books</Link></li>
-                  <li><Link href="/#authors" className="hover:text-white transition-colors">Authors</Link></li>
+                <h4 className="text-white font-bold mb-8 uppercase tracking-widest text-xs">Explore</h4>
+                <ul className="space-y-4 text-muted-foreground/80 font-medium">
+                  <li><Link href="/#categories" className="hover:text-primary transition-all inline-block hover:translate-x-1">Categories</Link></li>
+                  <li><Link href="/#books" className="hover:text-primary transition-all inline-block hover:translate-x-1">Books</Link></li>
+                  <li><Link href="/#authors" className="hover:text-primary transition-all inline-block hover:translate-x-1">Authors</Link></li>
+                  <li><Link href="/#features" className="hover:text-primary transition-all inline-block hover:translate-x-1">Features</Link></li>
                 </ul>
               </div>
 
               <div>
-                <h4 className="font-semibold mb-4">Categories</h4>
-                <ul className="space-y-2 text-gray-400">
-                  <li><Link href="/#categories" className="hover:text-white transition-colors">Crop Management</Link></li>
-                  <li><Link href="/#categories" className="hover:text-white transition-colors">Livestock</Link></li>
-                  <li><Link href="/#categories" className="hover:text-white transition-colors">Organic Farming</Link></li>
+                <h4 className="text-white font-bold mb-8 uppercase tracking-widest text-xs">Categories</h4>
+                <ul className="space-y-4 text-muted-foreground/80 font-medium">
+                  <li className="hover:text-primary transition-all inline-block hover:translate-x-1 cursor-pointer">Crop Management</li>
+                  <li className="hover:text-primary transition-all inline-block hover:translate-x-1 cursor-pointer">Livestock</li>
+                  <li className="hover:text-primary transition-all inline-block hover:translate-x-1 cursor-pointer">Organic Farming</li>
+                  <li className="hover:text-primary transition-all inline-block hover:translate-x-1 cursor-pointer">Smart Technology</li>
                 </ul>
               </div>
 
               <div>
-                <h4 className="font-semibold mb-4">Contact</h4>
-                <ul className="space-y-2 text-gray-400">
-                  <li>Email: {websiteContent?.footer_email || 'support@agribook.com'}</li>
-                  <li>Phone: {websiteContent?.footer_phone || '+91 1234567890'}</li>
+                <h4 className="text-white font-bold mb-8 uppercase tracking-widest text-xs">Reach Us</h4>
+                <ul className="space-y-6 text-muted-foreground/80">
+                  <li className="flex items-start gap-4">
+                    <span className="text-primary mt-1">✉️</span>
+                    <div>
+                      <div className="text-white text-sm font-bold mb-1">Email Us</div>
+                      <div className="text-sm">{websiteContent?.footer_email || 'support@agribook.com'}</div>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-4">
+                    <span className="text-primary mt-1">📞</span>
+                    <div>
+                      <div className="text-white text-sm font-bold mb-1">Call Us</div>
+                      <div className="text-sm">{websiteContent?.footer_phone || '+91 1234567890'}</div>
+                    </div>
+                  </li>
                 </ul>
               </div>
             </div>
 
-            <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
-              <p>{websiteContent?.footer_copyright || `© ${new Date().getFullYear()} Agribook. All rights reserved.`}</p>
+            <div className="border-t border-white/5 pt-12 flex flex-col md:flex-row justify-between items-center gap-6">
+              <p className="text-muted-foreground/60 text-sm font-medium">
+                {websiteContent?.footer_copyright || `© ${new Date().getFullYear()} Agribook. All rights reserved.`}
+              </p>
+              <div className="flex gap-8 text-sm font-medium text-muted-foreground/60">
+                <span className="hover:text-white transition-colors cursor-pointer">Privacy Policy</span>
+                <span className="hover:text-white transition-colors cursor-pointer">Terms of Service</span>
+              </div>
             </div>
           </div>
         </footer>
